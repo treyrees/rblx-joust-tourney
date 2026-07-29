@@ -8,8 +8,8 @@
 --   WARN  (exit 0): a doc is possibly stale — a `maps-to` file (or, for a `path#Key` entry, that key's
 --                   line range) has git commits newer than the doc's `updated` date. Drift is detected
 --                   from git, never asserted by a human. A `#Key` selector (e.g.
---                   `src/shared/Constants.lua#REWARDS`) narrows staleness from a whole hub file to one
---                   section, so a doc stops re-warning on every unrelated edit (ADR 0105).
+--                   `src/shared/Constants.luau#MATRIX`) narrows staleness from a whole hub file to
+--                   one section, so a doc stops re-warning on every unrelated edit.
 
 local fs = require("@lune/fs")
 local process = require("@lune/process")
@@ -19,53 +19,37 @@ local errors: { string } = {}
 local warnings: { string } = {}
 local notes: { string } = {}
 
--- Four ADR ids were each assigned to TWO files when the combat and economy redesign
--- streams ran in parallel and both incremented from the same base (a historical fact,
--- recorded in docs/design/decisions/README.md). ADRs are append-only / immutable, so
--- these are PRESERVED, not renumbered — but a NEW duplicate id must never slip in again.
--- Keyed by id → the alphabetically-sorted "fileA|fileB" of the grandfathered pair.
-local GRANDFATHERED_DUP_IDS: { [string]: string } = {
-	["0007"] = "0007-gathering-crafting-economy.md|0007-shield-subsystem.md",
-	["0018"] = "0018-arts-of-war-and-storm-ring-cloak.md|0018-entry-tickets-open-door.md",
-	["0019"] = "0019-pet-slot-model-and-companion-taxonomy.md|0019-targeting-deterministic-scorer-and-withering.md",
-	["0020"] = "0020-construct-art-repick-and-onpregame-seam.md|0020-rewards-chests-keys-drop-tables.md",
-	-- 0045: the same parallel-stream collision (combat steer-cost vs. overworld-interaction port both
-	-- landed on 0045). ADRs are immutable, so preserved as history rather than renumbered.
-	["0045"] = "0045-consolidate-steer-cost-onto-withering.md|0045-overworld-interaction-port.md",
-	-- 0087: the sixth collision (the economy Enchant-CraftWindow stream vs. the combat Elemental-weather
-	-- stream both landed on 0087). Recorded when the elemental-weather 0087 was retired (ADR 0088); ids are
-	-- immutable, so grandfathered here rather than renumbered.
-	["0087"] = "0087-elemental-weather-incentive-layer.md|0087-enchant-craftwindow-unification-soulbind-rider.md",
-	-- 0114: the seventh collision (the gathering-node engine PR and the GearCard first-class PR ran as
-	-- parallel streams and both took 0114, landing via merges #415/#411 the same day). Same treatment:
-	-- immutable, grandfathered, disambiguated in the README collision map.
-	["0114"] = "0114-gathering-node-engine-implementation.md|0114-gearcard-first-class-stamped-card.md",
-	-- 0193: the eighth collision (the craft-window progress-bars UI PR and the daily-key-rides-the-cache-open
-	-- PR ran as parallel streams and both took 0193, landing via same-day merges). Immutable, grandfathered.
-	["0193"] = "0193-craft-window-progress-bars-and-xp-float.md|0193-daily-key-rides-the-cache-open-ranked-gated.md",
-}
+-- Grandfathered duplicate ADR ids. In the predecessor repo eight ids had each been assigned to two
+-- files by parallel work streams incrementing from the same base; because ADRs are immutable those
+-- were preserved rather than renumbered, and listed here so the check could pass them while still
+-- catching NEW collisions.
+--
+-- This repo numbers from 0001 with no collisions, so the table is empty and every duplicate is an
+-- error. Left in place (rather than deleted along with the check) because the collision it guards
+-- against is a live risk the moment two branches add an ADR at the same time — which is exactly how
+-- all eight happened over there.
+local GRANDFATHERED_DUP_IDS: { [string]: string } = {}
 
--- Retired/superseded combat-proc ids — the machine half of the GLOSSARY "retired-proc ledger".
--- The combat catalog churns proc-by-proc through redesigns; the cardinal drift sin is a retired proc
--- name surviving as "live" in a doc after a newer pass replaced it (the per-item coupling SSOT is
--- `CombatProcs.MANIFEST`, not the docs). A LIVING design doc (not an ADR, not the ledger itself) may
--- name a retired proc ONLY when marking it as history — so a bare ``backticked`` mention without a
--- supersession marker on the same or previous line is flagged. Keep this in sync with GLOSSARY's ledger table
--- (a self-check below fails the lint if any id here is missing from GLOSSARY.md).
-local RETIRED_PROCS: { string } = {
-	"single_mind", "precision", "focused_fury", -- Focus reimagined (ADR 0037)
-	"war_banner", "bloodlust", "warband", -- Warlord reimagined (ADR 0040)
-	"devotion", "divine_shield", -- Barrier reimagined (ADR 0041)
-	"hunters_mark", -- Snipe redesign (ADR 0013)
-}
--- Retired/cut design VOCABULARY — the same idea, one level up from procs: a concept that a redesign
--- removed (e.g. a cut currency) must not resurface as live in a doc. Plain prose (matched as whole
--- words, case-insensitive), not backticked. Keyed term → the human note for the warning. Mirror in
--- GLOSSARY (ledger-sync below). Legacy-reference docs (maps-to entirely under `legacy/`) are exempt —
--- they describe the pre-rebuild game, where these were live.
-local RETIRED_VOCAB: { [string]: string } = {
-	Primal = "the fourth currency, cut → folded into Valor (ADR 0065)",
-}
+-- Retired mechanic names — the machine half of a GLOSSARY "retired-proc ledger". The cardinal drift
+-- sin is a retired name surviving as "live" in a doc after a redesign replaced it. A LIVING design
+-- doc (not an ADR, not the ledger itself) may name one ONLY when marking it as history, so a bare
+-- `backticked` mention with no supersession marker on the same or previous line is flagged.
+--
+-- Empty until Turbo Jousting retires its first mechanic name. What was here named the predecessor's
+-- combat catalog (`single_mind`, `war_banner`, `divine_shield`, …) and matched nothing in this repo,
+-- so it could only ever have produced confusing warnings. Add a term the day a redesign replaces
+-- one, along with its row in GLOSSARY.md — the ledger-sync check below fails the build if the two
+-- drift apart.
+local RETIRED_PROCS: { string } = {}
+
+-- Retired/cut design VOCABULARY — the same idea one level up: a concept a redesign removed must not
+-- resurface as live in a doc. Plain prose (whole words, case-insensitive), not backticked. Keyed
+-- term → the human note for the warning. Legacy-reference docs (maps-to entirely under `legacy/`)
+-- are exempt.
+--
+-- Empty for the same reason: the one entry here named a currency cut from the predecessor's economy,
+-- a concept this repo has never had.
+local RETIRED_VOCAB: { [string]: string } = {}
 
 -- Words that mark a retired-proc / retired-vocab mention as deliberate history, not a live claim.
 local SUPERSESSION_MARKERS: { string } = {
@@ -153,8 +137,8 @@ local function lastCommitDate(path: string): string?
 end
 
 -- A `maps-to` entry may pin a single top-level key with a `#Anchor` selector
--- ("src/shared/Constants.lua#REWARDS") so staleness tracks just that section's git history
--- instead of the whole hub file — the fix for the saturated Constants drift detector (audit §2.7).
+-- ("src/shared/Constants.luau#MATRIX") so staleness tracks just that section's git history
+-- instead of the whole hub file — otherwise every doc mapped to Constants re-warns on every edit.
 -- splitAnchor returns (path, anchor?); a bare path keeps the whole-file behavior.
 local function splitAnchor(entry: string): (string, string?)
 	local path, anchor = entry:match("^(.-)#([%w_]+)$")
@@ -443,13 +427,9 @@ end
 
 -- Enacted-rename guard — the machine half of the GLOSSARY "Legacy → rebuild constant-rename ledger".
 -- Once a rename is ENACTED in code, the legacy token must never resurface in the source it was renamed
--- out of. Keyed legacy token → { file, note }. Guards the Gem→Geode reagent rename (ADR 0088): the plain
--- Mining reagent is `Geode` (5 rarity adjectives Cracked/Small/Decent/Large/Giant); the word "Gem" is
--- reserved for the new colored ring reagent, so `matType`/`reagent` must never read "Gem" again.
-local ENACTED_RENAMES: { { token: string, file: string, note: string } } = {
-	{ token = 'matType = "Gem"', file = "src/shared/Economy.lua", note = "the Mining reagent is `Geode` now (ADR 0088)" },
-	{ token = 'reagent = "Gem"', file = "src/shared/Economy.lua", note = "Mining.reagent is `Geode` now (ADR 0088)" },
-}
+-- out of. Keyed legacy token → { file, note }. Empty here: the two entries this carried guarded a
+-- reagent rename in the predecessor's `src/shared/Economy.lua`, a file this repo does not have.
+local ENACTED_RENAMES: { { token: string, file: string, note: string } } = {}
 for _, r in ENACTED_RENAMES do
 	if fs.isFile(r.file) then
 		if fs.readFile(r.file):find(r.token, 1, true) then
@@ -461,26 +441,32 @@ for _, r in ENACTED_RENAMES do
 	end
 end
 
--- Combat-axis ADRs must cite a sim/probe run in their Consequences (ADR 0108; audit §2.8's cheap rule).
--- Decide-before-simulate was measurable: aggro needed 3 ADRs + a purpose-built probe in 4 days because
--- the tool came last. The gate: any ADR that touches a combat balance axis must show it consulted a
--- headless run before locking the number. It is FORWARD-LOOKING — only ADRs dated on/after CUTOFF are
--- checked, so the 100+ pre-rule ADRs are grandfathered (no retroactive flood). Combat-axis is opt-in via
--- front-matter `combat-axis: true` (the recommended, unambiguous path) with a token backstop for authors
--- who forget the flag; `combat-axis: false` is the escape hatch for a token false-positive.
--- Strictly PROSPECTIVE: the cutoff is the day AFTER the rule landed, so no ADR is ever judged by a gate
--- that did not exist when its author wrote it (same-day 2026-07-03 ADRs are grandfathered too).
-local SIM_CITATION_CUTOFF = "2026-07-04"
+-- Combat-axis ADRs must cite a sim run in their Consequences. The rule was carried over from the
+-- predecessor repo, where deciding before simulating was measurably expensive: one balance axis
+-- burned three ADRs and a purpose-built probe in four days because the instrument came last.
+--
+-- The gate: any ADR touching a combat balance axis must show it consulted a headless run before
+-- locking the number. Combat-axis is opt-in via front-matter `combat-axis: true` (the recommended,
+-- unambiguous path) with a token backstop below for authors who forget the flag; `combat-axis: false`
+-- is the escape hatch for a token false-positive.
+-- No cutoff here: the predecessor needed one to grandfather 100+ ADRs written before the rule
+-- existed, but this repo's first ADR postdates the rule, so every dated ADR is checked.
+--
 -- High-signal combat balance identifiers — ALL_CAPS constant names that essentially never appear in a
 -- non-combat ADR by accident (kept deliberately narrow to avoid prose false-positives; the explicit
 -- `combat-axis: true` flag is the real signal, this is only the forgot-the-flag backstop).
+-- These are Joust's actual tuning constants. The list this replaced named the predecessor's combat
+-- system (BASE_SPEED, TICKS_BY_AGGRO, ARMOR_MITIGATION, …), none of which exist here — so the
+-- backstop could not have caught a single Joust combat ADR that forgot its flag.
 local COMBAT_AXIS_TOKENS: { string } = {
-	"BASE_SPEED", "SPEED_PER_POINT", "TICKS_BY_AGGRO", "ATTACKS_BY_AGGRO", "CRIT_TRIGGER",
-	"ARMOR_MITIGATION", "ARMOR_FLAT_DR", "ARMOR_AGGRO", "AGGRO_LOCK", "GEAR_STAT_BONUS",
-	"STAT_FORMULAS", "RARITY_SCALING",
+	"NORMAL_DAMAGE", "PUNISHED_DAMAGE", "WEAK_DAMAGE", "THIN_BLOCK_MULT", "STACK_BLOCK_RESTORE",
+	"MAX_BONUS", "EASE_EXPONENT", "AIM_LOCK_BEFORE_TICK", "AIM_LOCK_MAX_RUNUP_FRACTION",
+	"MIN_RUNUP_SECONDS",
 }
--- A citation = a reference to one of the headless combat instruments.
-local SIM_CITATIONS: { string } = { "tools/sim.luau", "tools/aggro-probe.luau", "tools/match-demo.luau" }
+-- A citation = a reference to a headless combat instrument. Only one exists here; the two others
+-- this listed (tools/aggro-probe.luau, tools/match-demo.luau) were predecessor tools that do not
+-- exist in this repo, so an ADR could have "cited" a file that was never there and passed the gate.
+local SIM_CITATIONS: { string } = { "tools/sim.luau" }
 if fs.isDir(decisionsDir) then
 	for _, entry in fs.readDir(decisionsDir) do
 		if entry:match("^%d%d%d%d%-.*%.md$") then
@@ -489,7 +475,7 @@ if fs.isDir(decisionsDir) then
 			local fm = parseFrontMatter(text) or {}
 			local date = fm["date"]
 			-- Only forward-looking; untracked/dateless ADRs are skipped (nothing to compare against).
-			if date and date >= SIM_CITATION_CUTOFF then
+			if date then
 				local flag = fm["combat-axis"]
 				local isCombat
 				if flag == "true" then
@@ -506,14 +492,14 @@ if fs.isDir(decisionsDir) then
 					end
 				end
 				if isCombat then
-					-- Scope the citation to the ## Consequences section (audit §2.8: "in its Consequences
-					-- section"). Grab from that heading to the next `## ` heading or EOF.
+					-- Scope the citation to the ## Consequences section: grab from that heading to the
+					-- next `## ` heading or EOF.
 					local conseq = text:match("\n##%s+Consequences%s*\n(.-)\n##%s") or text:match("\n##%s+Consequences%s*\n(.*)$")
 					if not conseq then
 						table.insert(
 							errors,
 							"combat-axis ADR " .. entry .. " has no `## Consequences` section — it must cite a "
-								.. "sim/probe run there (ADR 0108). If this ADR is not combat-tuning, set `combat-axis: false`."
+								.. "sim run there. If this ADR is not combat-tuning, set `combat-axis: false`."
 						)
 					else
 						local cited = false
@@ -524,11 +510,13 @@ if fs.isDir(decisionsDir) then
 							end
 						end
 						if not cited then
+							-- The expected list is built from SIM_CITATIONS rather than spelled out, so the
+							-- message can never again tell an author to cite an instrument that doesn't exist.
 							table.insert(
 								errors,
 								"combat-axis ADR " .. entry .. " locks a combat axis but its `## Consequences` cites no "
-									.. "sim/probe run (expected one of tools/sim.luau, tools/aggro-probe.luau, tools/match-demo.luau) — "
-									.. "run the tool before pinning the number (ADR 0108). Not combat-tuning? set `combat-axis: false`."
+									.. "sim run (expected one of: " .. table.concat(SIM_CITATIONS, ", ") .. ") — "
+									.. "run the tool before pinning the number. Not combat-tuning? set `combat-axis: false`."
 							)
 						end
 					end
