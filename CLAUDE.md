@@ -25,6 +25,24 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
 8. **Scope doctrine: three things** — the pass, the loop, the chase (+ ghost-first opponent supply).
    New systems must justify why they aren't post-launch. (GAME_SPEC §10.)
 
+## Commands
+
+```bash
+rojo serve                       # sync default.project.json → src/ into Studio
+lune run tests/run.luau          # unit tests (headless, no Studio — the robloxenv shim)
+lune run tools/design-lint.luau  # design-doc drift / link / ADR checker
+```
+
+Both gates run automatically at session start via `.claude/hooks/session-start.sh` (remote sessions).
+Rojo maps `src/{server,client,gui,shared}` → ServerScriptService / StarterPlayerScripts / StarterGui /
+ReplicatedStorage.Shared.
+
+## How we work
+
+**[docs/design/WORKFLOW.md](docs/design/WORKFLOW.md)** — the doc↔code↔ADR stewardship loop + the two
+gates, carried over from the predecessor repo where it was proven across 200+ ADRs. Follow it on
+every change. Doc conventions (front-matter, ADR format): [docs/design/README.md](docs/design/README.md).
+
 ## Conventions
 
 - Luau, `--!strict` on new modules; OOP via metatables (`Module.new()`).
