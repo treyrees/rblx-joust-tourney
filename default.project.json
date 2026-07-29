@@ -1,5 +1,5 @@
 {
-  "name": "Joust",
+  "name": "TurboJousting",
   "tree": {
     "$className": "DataModel",
     "ServerScriptService": {

@@ -230,7 +230,15 @@ elimination stakes, the craft web as the front door.
   noise → the game degrades to matrix-EV + slot machine at the median. Acceptable if reads emerge in
   ranked/older cohorts — the Pokémon shape — but verify: do playtesters start bluffing unprompted
   within ~10 matches?)
-- Name / thumbnail / title-hook (platform-meta phrasing).
+- Name / thumbnail / title-hook (platform-meta phrasing). **Working title: Turbo Jousting**
+  (tentative). It reads well on platform — two words, a familiar intensifier plus the fantasy named
+  outright, searchable and thumbnail-able — and since ADR 0002 it has mechanical backing rather than
+  being packaging: bracket lanes make speed a real escalating axis, so the top bracket genuinely *is*
+  the turbo one. **The caution that comes with it:** §2 positions this game as the comp's loop with
+  the twitch *removed*, and "Turbo" promises speed that a chunk of players will read as *reflexes*.
+  Store copy and thumbnails must lean "fast and dramatic", never "fast reflexes" — get that wrong and
+  we recruit exactly the players most likely to bounce off a commit-based game, and the resulting D1
+  numbers will look like a retention problem when they are a marketing-promise problem.
 
 ## 13. Milestone 1: the gray-box pass (and nothing else)
 

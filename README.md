@@ -1,4 +1,4 @@
-# Joust (working title)
+# Turbo Jousting (working title)
 
 A Roblox game: a recurring gauntlet of fast 1v1 jousts. Each pass is one committed mind-game
 decision — hidden guard, televised aim, priced bluffing — resolved in a single tick, ending in a
