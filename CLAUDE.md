@@ -1,4 +1,4 @@
-# CLAUDE.md — Joust (working title)
+# CLAUDE.md — Turbo Jousting (working title)
 
 Roblox game: a recurring gauntlet of fast 1v1 jousts. One committed mind-game decision per pass,
 resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees/rblx-auto-br`).
