@@ -1,5 +1,5 @@
 ---
-maps-to: [tools/design-lint.luau, tests/run.luau]
+maps-to: [tools/design-lint.luau, tests/run.luau, tools/sim.luau, .github/workflows/gates.yml]
 decisions: []
 owner: trey
 updated: 2026-07-29
@@ -63,11 +63,24 @@ being current. That is the entire discipline; everything below is how you uphold
 ```bash
 lune run tests/run.luau          # the code is correct
 lune run tools/design-lint.luau  # docs ↔ code ↔ ADRs are consistent
+lune run tools/sim.luau          # the tuning numbers still hold their invariants
 ```
 
-Green on both ⇒ the change is consistent by construction. Red ⇒ fix before you push. Nothing else
-gates — these two *are* the safety net, on purpose. The `.claude/hooks/session-start.sh` hook runs
-both automatically at the start of every remote session.
+Green on all three ⇒ the change is consistent by construction. Red ⇒ fix before you push. Nothing
+else gates — these *are* the safety net, on purpose.
+
+They run in two places, and the difference matters:
+
+- **[`.github/workflows/gates.yml`](../../.github/workflows/gates.yml)** on every PR and every push
+  to `main`. This is the one that actually protects the branch: it does not depend on anyone having
+  a session open.
+- **`.claude/hooks/session-start.sh`** at the start of every remote session, so a session opens
+  already knowing whether the tree is green.
+
+The simulator is listed here as a gate because it is one: it exits non-zero if convergence leaves
+GAME_SPEC §4's 3–5 pass band, if reading stops beating random by a wide margin, if most falls start
+coming off near-certain rolls, or if neutral-camping climbs the table. That makes
+[CLAUDE.md invariant 7](../../CLAUDE.md) a thing CI enforces rather than a thing someone remembers.
 
 ## Session & token discipline (proven the hard way)
 
