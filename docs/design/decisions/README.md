@@ -8,3 +8,4 @@ ADR, and add your row in the same commit** — the ledger is the id-collision gu
 | id | title | date |
 |----|-------|------|
 | [0001](0001-pass-resolution-matrix-and-balance-numbers.md) | Pass resolution — the matrix rule, the Balance numbers, and a linear proration curve | 2026-07-29 |
+| [0002](0002-monetization-standard-meta.md) | Monetization adopts the platform-standard meta, arranged around the read invariant | 2026-07-29 |

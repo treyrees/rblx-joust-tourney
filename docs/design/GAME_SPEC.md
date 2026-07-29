@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001]
+decisions: [0001, 0002]
 owner: trey
 updated: 2026-07-29
 ---
@@ -170,7 +170,8 @@ Horses across rarity tiers (the vertical/tycoon chase, the dice-loader per §4's
 the horizontal playstyle spread (equip via native hotbar). v1 can be embarrassingly small: a handful
 of horses × 3 rarities, 3–4 lances with distinct matrix-tilts. The acquisition loop (currency faucet,
 gacha/eggs/breeding, any idle/stable-tending layer) is **undesigned** — it is the D1 half of the game
-and needs its own design session (see §12). Launch with a deliberately debatable tier list: games
+and needs its own design session (see §12) — though its commercial skeleton is now settled by
+[chase/MONETIZATION.md](chase/MONETIZATION.md) (ADR 0002). Launch with a deliberately debatable tier list: games
 that ship with an arguable meta get their first content wave made for them.
 
 ## 10. Scope doctrine: three things (plus Thing 0)
@@ -210,7 +211,11 @@ elimination stakes, the craft web as the front door.
   the coverage rule, so they need their own ADR and their own sim run.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
-- Matchmaking: trophy gating vs stakes rooms (decide once, per §2.1).
+  Monetization structure is settled (ADR 0002, [chase/MONETIZATION.md](chase/MONETIZATION.md));
+  still open inside it: faucet sizing, egg odds, ante ladders, and the rarity→stat curve (the
+  latter needs its own combat-axis ADR + sim run before any egg ships).
+- Matchmaking: trophy gating vs stakes rooms (decide once, per §2.1 — stakes rooms now also carry a
+  monetization argument, MONETIZATION.md §4.3).
 - Match wrapper: is a "match" one duel to unhorse, or best-of-duels? Session rhythm target.
 - The charge's kinesthetic/presentation layer (camera, sound ramp, crowd) — designed only by feel,
   in-engine.
