@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001]
+decisions: [0001, 0002]
 owner: trey
 updated: 2026-07-29
 ---
@@ -30,7 +30,8 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
   collection chase UBG lacks. Gameplay is *simpler* than the comp; depth lives in reads and wagers.
 - **Format playbook** (Clash Royale, 8 Ball Pool, Super Auto Pets, Marvel Snap, FOOTSIES/Divekick,
   YOMI Hustle, For Honor as the directional-guard cautionary tale):
-  1. Progression and matchmaking rise together (trophy gating or stakes rooms — decide once).
+  1. Progression and matchmaking rise together — settled as **horse-tier rooms** (ADR 0002): the
+     horse you bring is the room you are in, and the room sets the speed.
   2. An ante per match makes short rounds meaningful.
   3. **Async ghosts are the population cheat code** — a ghost is just a guard choice + an aim trace;
      mechanically indistinguishable from a live opponent. **Ghost-first is plan-of-record** (Thing 0).
@@ -132,6 +133,11 @@ matter more than the dice on average, or the read game dies and it's only a slot
 
 - **Horse (vertical, rarity, the chase):** max Balance, damage soak, and **recovery** (bonus to the
   teeter roll — the rarest horses are the *clutch* horses; better fantasy than damage sponge).
+- **Horse speed (the odd one out — an *access* stat, not an in-match stat):** speed is set by the
+  **bracket**, not by the rider, and rarity determines which brackets a horse may enter (ADR 0002).
+  There is one run-up and one tick, so there can only be one speed in a match; a per-rider speed would
+  shrink the opponent's decision window, which is rarity beating a read. Rarity buys admission to a
+  faster, louder tier — never an edge inside it.
 - **Lance (horizontal, playstyle, native hotbar):** Balance damage profile + matrix personality
   (heavy lance = harder normals; fine lance = doubled punish tier; etc.).
 - **Ability (active, one-shot per match):** manipulates one number or one roll — reroll, guaranteed
@@ -210,7 +216,11 @@ elimination stakes, the craft web as the front door.
   the coverage rule, so they need their own ADR and their own sim run.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
-- Matchmaking: trophy gating vs stakes rooms (decide once, per §2.1).
+- ~~Matchmaking: trophy gating vs stakes rooms~~ — settled by ADR 0002 with a third option neither
+  listed: **horse-tier rooms**. The horse you bring is the room you are in. What replaces it: the
+  speed-to-run-up-duration mapping per bracket, which `tools/sim.luau` cannot answer (it resolves
+  commitments; the open question is how long a *human* needs to make one) and which needs a playtest
+  instrument that does not exist yet.
 - Match wrapper: is a "match" one duel to unhorse, or best-of-duels? Session rhythm target.
 - The charge's kinesthetic/presentation layer (camera, sound ramp, crowd) — designed only by feel,
   in-engine.
