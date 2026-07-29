@@ -7,4 +7,4 @@ ADR, and add your row in the same commit** — the ledger is the id-collision gu
 
 | id | title | date |
 |----|-------|------|
-| — | (none yet — the founding design is GAME_SPEC.md; the first ADR is the first *change* to it) | |
+| [0001](0001-pass-resolution-matrix-and-balance-numbers.md) | Pass resolution — the matrix rule, the Balance numbers, and a linear proration curve | 2026-07-29 |
