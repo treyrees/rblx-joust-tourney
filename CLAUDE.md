@@ -10,8 +10,7 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
 
 1. **Reads beat rarity.** Reads resolve deterministically; survival resolves stochastically; rarity
    loads the dice — and a correct read always beats a rarer horse. (GAME_SPEC §4.)
-2. **Four directions are the rules; neutral is the exceptions slot.** The directional game is never
-   gimmicked; archetype identity hooks neutral or the UI layer. (GAME_SPEC §7.)
+2. **Four directions are the core gameplay, neutral is the default.**; archetype identity hooks neutral or the UI layer. (GAME_SPEC §7.)
 3. **One tick per pass, simultaneous resolution.** Both commitments snapshot, resolve at once, no
    order bias. Server-authoritative; client is display-only during resolution.
 4. **Aim state is quantized** to the four sectors (+ neutral). Animation may be smooth; the televised
