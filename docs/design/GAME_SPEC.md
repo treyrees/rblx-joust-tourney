@@ -137,7 +137,9 @@ matter more than the dice on average, or the read game dies and it's only a slot
   **bracket**, not by the rider, and rarity determines which brackets a horse may enter (ADR 0002).
   There is one run-up and one tick, so there can only be one speed in a match; a per-rider speed would
   shrink the opponent's decision window, which is rarity beating a read. Rarity buys admission to a
-  faster, louder tier — never an edge inside it.
+  faster, louder tier — never an edge inside it. **Each bracket is its own physical lane, and lane
+  length scales with speed so run-up duration is identical everywhere** — the sub-15s cycle (§1) holds
+  at every tier, and speed is a pure spectacle axis that never trades against the read game.
 - **Lance (horizontal, playstyle, native hotbar):** Balance damage profile + matrix personality
   (heavy lance = harder normals; fine lance = doubled punish tier; etc.).
 - **Ability (active, one-shot per match):** manipulates one number or one roll — reroll, guaranteed

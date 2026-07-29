@@ -52,32 +52,44 @@ speed an *access* stat rather than an *in-match* stat is what keeps the chase an
 compatible. Note that this makes speed unlike the other three stats in §6: max Balance, soak and
 recovery all apply per-rider, and speed applies per-match.
 
-### 3. Felt speed is decoupled from the decision window
+### 3. Each bracket gets its own lane, and distance scales with speed
 
-High brackets must **look** sonic — camera, field of view, motion blur, sound ramp, crowd reaction,
-animation rate — while the time a player actually has to think shrinks far less than proportionally.
-Run-up duration is not permitted to scale linearly with visual speed.
+**Every bracket is a physically distinct jousting lane, and its length scales with its speed so that
+run-up duration is identical in every bracket.** A sonic horse covers a proportionally longer lane.
+Speed and distance rise together; time does not move.
 
-Without this, the top of the ladder becomes an execution game, which is the exact thing §2 says was
-removed to widen the audience. The spectacle is the product; the twitch is not.
+This is what makes the whole design safe, and it is a structural guarantee rather than a discipline
+to maintain. The obvious way to build "faster brackets" is to keep one lane and shorten the clock,
+which would compress the decision window exactly as rank rises and turn the top of the ladder into an
+execution game — the precise thing §2 says was removed to widen the audience. Scaling the lane
+instead means:
 
-### 4. The minimum run-up is derived from the ping guard, not from taste
+- the decision window is **constant across every bracket**, by construction
+- §1's sub-15-second pass cycle holds at every tier, with no per-bracket retuning of the
+  intermission / run-up / resolution split
+- **speed becomes a pure spectacle axis with no gameplay cost at all**, so it can be pushed as far as
+  the presentation can carry without ever trading against the read game
+
+The spectacle is the product; the twitch is not. The lane is the free variable that buys the first
+without the second.
+
+### 4. The minimum run-up is a backstop, derived from the ping guard
+
+With §3 in place, run-up duration is constant and this bound should never be approached. It is kept
+as a guard against the failure mode §3 exists to prevent: someone later adding a fast bracket by
+shortening a lane rather than lengthening it.
 
 Invariant 4 locks aim a few tenths before the tick so the pass can never become a ping war. That
-guard is **absolute** — network latency is measured in seconds, not in fractions of a run-up — so as
-the run-up shortens, the lock eats a larger share of it. At some speed the lock swallows the decision
-window entirely and the pass stops being a decision.
-
-So the fastest possible bracket is bounded by arithmetic:
+guard is **absolute** — network latency is measured in seconds, not in fractions of a run-up — so a
+short enough run-up lets the lock swallow the decision window and the pass stops being a decision:
 
 ```
 MIN_RUNUP_SECONDS = AIM_LOCK_BEFORE_TICK / AIM_LOCK_MAX_RUNUP_FRACTION
 ```
 
-With the current 0.3s lock and a 10% ceiling, no bracket may have a run-up under **3 seconds**,
-however fast its horses look. `Constants.PASS.AIM_LOCK_MAX_RUNUP_FRACTION` encodes the ceiling and a
-unit test enforces it, so a future bracket-speed change cannot quietly violate this by editing a
-duration.
+With the current 0.3s lock and a 10% ceiling, no bracket may have a run-up under **3 seconds**.
+`Constants.PASS.AIM_LOCK_MAX_RUNUP_FRACTION` encodes the ceiling and two unit tests enforce it, so
+that failure mode fails the build rather than shipping.
 
 ## Consequences
 
@@ -93,13 +105,22 @@ duration.
   1 compliant by construction rather than by tuning.
 - **Speed can no longer be sold as raw power**, which forecloses one obvious monetization line. This
   is the cost of the invariant and it is accepted deliberately.
-- **Presentation cost scales with bracket count.** Each tier needs its own ramp — camera, audio,
-  crowd — to sell a speed difference that the rules do not implement. Cheap tiers will feel like
-  reskins.
-- **The speed-to-duration mapping is still open**, and so is the aim-lock ceiling itself (10% is a
+- **Build cost moves from tuning to art.** Each bracket is a real lane asset at a real length, not a
+  parameter on a shared track, and each needs its own presentation ramp — camera, audio, crowd — to
+  sell a speed difference the rules do not implement. Cheap tiers will read as reskins. The upside is
+  that this is *content* work, which parallelizes and can ship incrementally, rather than *balance*
+  work, which cannot.
+- **Long lanes at high speed are a rendering and streaming problem**, not a design one, but it is the
+  constraint most likely to cap how far the spectacle axis can actually be pushed. Worth a technical
+  probe before committing to the top bracket's speed.
+- **Ghost traces stay portable across brackets.** A ghost is a guard choice plus an aim trace
+  (§2.3, Thing 0). Because duration is constant everywhere, a ghost recorded in any bracket replays
+  faithfully in any other, so the ghost pool is one pool rather than one per tier. For the mechanism
+  that is meant to solve opponent supply at launch, that matters a great deal.
+- **The speed-to-lane-length mapping is still open**, and so is the aim-lock ceiling (10% is a
   starting position, not a measured one). Both need their own `combat-axis: true` ADR. Neither can be
-  settled by `tools/sim.luau`: the simulator resolves commitments, and the question here is how long
-  a *human* needs to make one. That is a playtest instrument, and it does not exist yet.
+  settled by `tools/sim.luau`: the simulator resolves commitments, and these questions are about
+  physical staging and human reaction. That is a playtest instrument, and it does not exist yet.
 - **M1 is unaffected.** The gray-box pass (GAME_SPEC §13) ships at a single speed. This ADR exists so
   the bracket structure is decided before anything is built against a contrary assumption, not
   because it is being built now.
