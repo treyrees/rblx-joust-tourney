@@ -1,6 +1,6 @@
 ---
-maps-to: [src/shared/Constants.lua]
-decisions: []
+maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
+decisions: [0001]
 owner: trey
 updated: 2026-07-29
 ---
@@ -66,8 +66,10 @@ Aim is fully televised to the opponent and spectators.
 - **Offensive bonus — prorated:** scales with the fraction of the run-up you held your *final* aim
   direction. The buildup meter is **public** — the crowd watches your commitment charge. A late
   switch is the bluff, and it has a mechanical price (reset buff = weaker strike), not just an
-  informational one. Proration curve open: linear / ease-in / floor-plus-linear (lean: floor+ease-in;
-  a minimum-hold floor makes last-instant flicking a real sacrifice without banning it).
+  informational one. **Proration curve: linear** (ADR 0001). The floor+ease-in lean recorded here
+  originally was overturned by the sim: a floor collapses a half-held aim to within a point of a pure
+  last-instant flick, which turns the bluffing spectrum into a binary. Linear keeps the meter
+  readable as a dial and still costs the flicker 8 points of win rate.
 
 **Information architecture (three layers):** public offense meter + televised aim → inferable active
 guard → hidden passive guard (the hole card), revealed at impact. Every pass is a readable poker hand.
@@ -78,13 +80,18 @@ guard → hidden passive guard (the hole card), revealed at impact. Every pass i
 - **Beginners must be able to ignore every layer** — guard somewhere + aim somewhere is complete,
   legal jousting. The signaling game is emergent depth, never required literacy. Protect this in tuning.
 
-**Neutral baseline (must be defined before gray-box; current leans):**
+**Neutral baseline (settled by ADR 0001):**
 1. Neutral aim at the tick → weak center strike, no punish potential, zero honesty buff
-   (survivable, not viable).
+   (survivable, not viable). In the sim, neutral-camping ranks last of nine strategies.
 2. Neutral active guard → none (maximally soft; cageyness is priced by softness + proration tax).
-3. Neutral as a passive-guard option → open question.
+3. Neutral as a passive guard → legal, and it covers nothing. It cannot stack, so it forfeits the
+   defensive bonus and leaves coverage at a single direction: a real option that is never a good one.
 
 ## 4. Resolution: the matrix, Balance, and the unhorse roll
+
+> Implemented and pinned: [pass/RESOLUTION.md](pass/RESOLUTION.md) is the deep doc, ADR 0001 the
+> decision. Punish keys off the **active** guard, so the rule reads *you are exposed exactly where you
+> strike*; a punish is 3x a normal.
 
 **The matrix beat (deterministic — the gameable layer):** aim vs guard resolves to an outcome tier —
 **blocked / normal / punished** (punished = struck opposite your guard). Tiers translate to **Balance
@@ -195,9 +202,12 @@ elimination stakes, the craft web as the front door.
 
 ## 12. Open questions (the honest list)
 
-- Proration curve shape (linear / ease-in / floor+ease-in) — gray-box question.
-- Neutral as passive-guard option; exact neutral baseline numbers.
-- Depleting guards: confirm as the escalation mechanism; tune crack/break thresholds.
+- ~~Proration curve shape~~ / ~~neutral as a passive-guard option~~ / ~~neutral baseline numbers~~ —
+  settled by ADR 0001. What replaces them: the hold-fraction *distribution* real players produce. The
+  sim's riders hold fixed fractions, so it cannot speak to this, and it is the most likely reason to
+  reopen the curve.
+- Depleting guards: confirm as the escalation mechanism; tune crack/break thresholds. These change
+  the coverage rule, so they need their own ADR and their own sim run.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
 - Matchmaking: trophy gating vs stakes rooms (decide once, per §2.1).

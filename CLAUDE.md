@@ -30,6 +30,7 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
 rojo serve                       # sync default.project.json → src/ into Studio
 lune run tests/run.luau          # unit tests (headless, no Studio — the robloxenv shim)
 lune run tools/design-lint.luau  # design-doc drift / link / ADR checker
+lune run tools/sim.luau          # the pass simulator — the instrument combat-axis ADRs must cite
 ```
 
 Both gates run automatically at session start via `.claude/hooks/session-start.sh` (remote sessions).
