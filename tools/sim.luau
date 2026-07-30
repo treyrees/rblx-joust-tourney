@@ -43,6 +43,20 @@ do
 		elseif a == "--curve" then
 			Constants.PRORATION.CURVE = args[i + 1]
 			i += 2
+		elseif a == "--ring" then
+			-- Four letters, one per quarter-turn offset from the defender's own aim: C=crit G=guard
+			-- N=normal. Lets a candidate ring from tools/rings.luau be played out over real matches
+			-- rather than only solved in one shot.
+			local FROM = { C = "crit", G = "guard", N = "normal" }
+			local code = args[i + 1]
+			for k = 0, 3 do
+				local cls = FROM[code:sub(k + 1, k + 1):upper()]
+				if not cls then
+					error("bad --ring code: " .. tostring(code))
+				end
+				Constants.RING[k] = cls
+			end
+			i += 2
 		else
 			i += 1
 		end
@@ -86,6 +100,17 @@ type Strategy = {
 	commit: (Ctx) -> any,
 }
 
+-- Ring-relative helpers. The three shapes GAME_SPEC §3 names — depth, breadth, split — are defined
+-- against whatever Constants.RING currently says, not against the assumption that the Guard is
+-- opposite and the Crit is your own aim. That assumption is exactly what tools/rings.luau is testing.
+local function guardOf(aim: string): string
+	return PR.guards({ shield = D.NEUTRAL, aim = aim, holdFraction = 1 })[1] or pick(FOUR)
+end
+
+local function critOf(aim: string): string
+	return PR.crits({ shield = D.NEUTRAL, aim = aim, holdFraction = 1 })[1] or pick(FOUR)
+end
+
 local function mostFrequent(list: { string }): string?
 	if #list == 0 then
 		return nil
@@ -116,20 +141,22 @@ local STRATEGIES: { Strategy } = {
 			return { shield = pick(FOUR), aim = D.NEUTRAL, holdFraction = 1 }
 		end,
 	},
-	-- Always supershields: maximum depth, but its own Aim direction is left as an open Crit.
+	-- Always supershields: Shield stacked on a direction the Aim already guards. Maximum depth, and
+	-- it leaves whatever the ring exposes wide open.
 	{
 		name = "supershield",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { shield = Constants.OPPOSITE[aim], aim = aim, holdFraction = 1 }
+			return { shield = guardOf(aim), aim = aim, holdFraction = 1 }
 		end,
 	},
-	-- Always covers its own Crit with the Shield. The safe, bonus-less shape.
+	-- Always plugs its own Crit with the Shield. The safe, bonus-less shape — and under today's ring
+	-- the one that beats even the oracle, which is what put the ring itself under suspicion.
 	{
 		name = "axis",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { shield = aim, aim = aim, holdFraction = 1 }
+			return { shield = critOf(aim), aim = aim, holdFraction = 1 }
 		end,
 	},
 	-- Commits early and never flinches: full honesty bonus, fully readable.
@@ -161,8 +188,10 @@ local STRATEGIES: { Strategy } = {
 		name = "counter",
 		commit = function(ctx)
 			local theirAim = mostFrequent(ctx.oppAims)
-			local aim = if theirAim and theirAim ~= D.NEUTRAL then theirAim else pick(FOUR)
-			return { shield = aim, aim = aim, holdFraction = 0.9 }
+			-- Strike where their habitual aim leaves them exposed, which under a general ring is not
+			-- necessarily the direction they are aiming.
+			local aim = if theirAim and theirAim ~= D.NEUTRAL then critOf(theirAim) else pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0.9 }
 		end,
 	},
 	-- The ceiling, not a player: sees the opponent's commitment and picks the best aim against it.
@@ -175,15 +204,21 @@ local STRATEGIES: { Strategy } = {
 			if not opp then
 				return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
 			end
-			local bestAim, bestDmg = FOUR[1], -1
+			-- A true best response: search BOTH inputs and score on net Balance, not on damage dealt.
+			-- Scoring the strike alone made the oracle walk into crits under rings where the aim
+			-- carries most of the exposure, which understated those rings rather than the oracle.
+			local best, bestNet = nil, -math.huge
 			for _, aim in FOUR do
-				local dmg = PR.strikeDamage({ shield = D.IN, aim = aim, holdFraction = 1 }, opp)
-				if dmg > bestDmg then
-					bestAim, bestDmg = aim, dmg
+				for _, shield in FOUR do
+					local me = { shield = shield, aim = aim, holdFraction = 1 }
+					local dealt = PR.strikeDamage(me, opp)
+					local taken = PR.strikeDamage(opp, me)
+					if dealt - taken > bestNet then
+						best, bestNet = me, dealt - taken
+					end
 				end
 			end
-			-- Cover the Crit its own Aim opens, since it cannot read the opponent's Aim in return.
-			return { shield = bestAim, aim = bestAim, holdFraction = 1 }
+			return best
 		end,
 	},
 }

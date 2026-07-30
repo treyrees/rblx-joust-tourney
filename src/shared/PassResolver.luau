@@ -73,27 +73,85 @@ function PassResolver.opposite(dir: Direction): Direction
 	return opp :: Direction
 end
 
--- Polarization (§3): the Guard is ALWAYS the opposite of the Aim, so one input carries attack and
--- defense together. A neutral aim yields no Guard at all (§3 neutral baseline 2) — maximally soft,
--- which is what prices cageyness.
+-- Position of each direction on Constants.CYCLE, so offsets can be taken in O(1).
+local CYCLE_INDEX: { [string]: number } = {}
+for i, dir in Constants.CYCLE do
+	CYCLE_INDEX[dir] = i - 1
+end
+
+-- Quarter-turns from `from` to `to` around the ring, 0–3. Neutral has no position, so it has no
+-- offset either — callers must handle it before asking.
+function PassResolver.offset(from: Direction, to: Direction): number?
+	local a, b = CYCLE_INDEX[from], CYCLE_INDEX[to]
+	if a == nil or b == nil then
+		return nil
+	end
+	return (b - a) % 4
+end
+
+-- What the defender's ring says about a strike arriving from direction `aim`: "crit", "guard",
+-- "normal", or nil when the defender is aiming neutral and therefore has no ring at all (§3 neutral
+-- baseline 2 — maximally soft, which is what prices cageyness).
+function PassResolver.ringClass(defender: Commitment, aim: Direction): string?
+	local off = PassResolver.offset(defender.aim, aim)
+	if off == nil then
+		return nil
+	end
+	return Constants.RING[off]
+end
+
+-- The directions this rider's aim defends. Polarization (§3) still holds in the default ring, where
+-- the single guard sits at offset 2 and is therefore the opposite of the aim — one input carrying
+-- attack and defense together. A ring may declare zero, one, or two guard offsets.
+function PassResolver.guards(commitment: Commitment): { Direction }
+	local out: { Direction } = {}
+	if commitment.aim == Constants.DIRECTIONS.NEUTRAL then
+		return out
+	end
+	for off = 0, 3 do
+		if Constants.RING[off] == "guard" then
+			local base = CYCLE_INDEX[commitment.aim]
+			table.insert(out, Constants.CYCLE[((base + off) % 4) + 1] :: Direction)
+		end
+	end
+	return out
+end
+
+-- The single guard direction, for display and for the outcome record. Under the default ring this is
+-- exactly `opposite(aim)`, which is what every piece of player-facing copy says.
 function PassResolver.guard(commitment: Commitment): Direction
-	return PassResolver.opposite(commitment.aim)
+	return PassResolver.guards(commitment)[1] or Constants.DIRECTIONS.NEUTRAL
 end
 
--- The Crit direction: opposite the Guard, and therefore — by polarization — identically the rider's
--- own Aim. It is named separately from `aim` because the two are the same direction read for opposite
--- purposes: `aim` is where this rider threatens, `crit` is where this rider is exposed. Every piece of
--- player-facing copy about being hit points here, so the concept earns a name even though the body of
--- the function is a tautology.
+-- The directions where this rider is exposed. Under the default ring there is exactly one and it is
+-- identically the rider's own aim, which is where "you are exposed exactly where you strike" comes
+-- from. A chiral ring moves it off the aim, and that is the whole point of sweeping the space.
+function PassResolver.crits(commitment: Commitment): { Direction }
+	local out: { Direction } = {}
+	if commitment.aim == Constants.DIRECTIONS.NEUTRAL then
+		return out
+	end
+	for off = 0, 3 do
+		if Constants.RING[off] == "crit" then
+			local base = CYCLE_INDEX[commitment.aim]
+			table.insert(out, Constants.CYCLE[((base + off) % 4) + 1] :: Direction)
+		end
+	end
+	return out
+end
+
 function PassResolver.crit(commitment: Commitment): Direction
-	return commitment.aim
+	return PassResolver.crits(commitment)[1] or Constants.DIRECTIONS.NEUTRAL
 end
 
--- Supershielding (§3): the binary defensive bonus, awarded iff the Guard lands on the Shield at the
--- tick. Neutral never supershields — there is nothing to guard over.
+-- Supershielding (§3): the binary defensive bonus, awarded iff the Shield is sitting on one of the
+-- ring's guard offsets — depth on a direction the aim already defends, rather than breadth across
+-- two. Neutral never supershields; there is no ring to be deep on.
 function PassResolver.isSupershielded(commitment: Commitment): boolean
-	local guard = PassResolver.guard(commitment)
-	return guard ~= Constants.DIRECTIONS.NEUTRAL and guard == commitment.shield
+	if commitment.shield == Constants.DIRECTIONS.NEUTRAL then
+		return false
+	end
+	return PassResolver.ringClass(commitment, commitment.shield) == "guard"
 end
 
 -- ---- proration ---------------------------------------------------------------------------------
@@ -142,14 +200,11 @@ function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 		return "weak"
 	end
 
-	local guard = PassResolver.guard(defender)
-	local covered = (guard ~= NEUTRAL and attacker.aim == guard)
-		or (defender.shield ~= NEUTRAL and attacker.aim == defender.shield)
-	if covered then
+	local class = PassResolver.ringClass(defender, attacker.aim)
+	if class == "guard" or (defender.shield ~= NEUTRAL and attacker.aim == defender.shield) then
 		return "blocked"
 	end
-
-	if guard ~= NEUTRAL and attacker.aim == PassResolver.crit(defender) then
+	if class == "crit" then
 		return "crit"
 	end
 	return "normal"

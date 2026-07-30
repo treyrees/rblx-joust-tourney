@@ -44,6 +44,26 @@ Constants.OPPOSITE = {
 	["neutral"] = "neutral",
 }
 
+-- The cycle: the four directions in a fixed rotational order, so "one sector around the ring" is a
+-- well-defined idea. It is stated in the self-relative labels rather than in screen geometry on
+-- purpose — a clockwise/anticlockwise rule would smuggle back exactly the mirrored-pass handedness
+-- ambiguity the self-relative framing exists to kill (§3). Index distance 2 is opposition, so
+-- CYCLE and OPPOSITE agree by construction.
+Constants.CYCLE = { "up", "in", "down", "out" }
+
+-- The RING: what happens at each quarter-turn offset from the defender's own aim. Offset 0 is the
+-- direction they are aiming; offset 2 is the direction they are aiming away from.
+--   "crit"   — struck here and uncovered, this rider takes the crit tier
+--   "guard"  — the aim-derived defense; a strike here is blocked (clean if the Shield is also here)
+--   "normal" — an uncontested strike
+--
+-- This table IS the game's core relation, and its shape decides something the damage numbers cannot
+-- touch. Whether a crit can ever be one-sided depends only on symmetry: on a four-ring, offsets 0
+-- and 2 are their own negatives, so a crit there is ALWAYS mutual, while offsets 1 and 3 are each
+-- other's negatives. A ring is chiral — capable of a one-sided crit — if and only if it marks
+-- exactly one of the two perpendicular offsets as "crit". `tools/rings.luau` sweeps the whole space.
+Constants.RING = { [0] = "crit", [1] = "normal", [2] = "guard", [3] = "normal" }
+
 -- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
 -- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
 -- which by polarization is the direction they are themselves aiming ("you are exposed exactly where
