@@ -64,6 +64,14 @@ Constants.CYCLE = { "up", "in", "down", "out" }
 -- exactly one of the two perpendicular offsets as "crit". `tools/rings.luau` sweeps the whole space.
 Constants.RING = { [0] = "crit", [1] = "normal", [2] = "guard", [3] = "normal" }
 
+-- How many notches the Shield covers, counted from the notch it is placed on. 1 means the Shield
+-- defends exactly one direction, which is the shipped rule. It exists as a knob because a ring with
+-- more notches than the Shield can cover shrinks the hole card's reach: on an eight-notch ring a
+-- one-notch Shield defends half as much of the circle as it does on a four-notch one, which is a
+-- balance change smuggled in by an input-resolution change. Kept explicit so it cannot happen by
+-- accident.
+Constants.SHIELD_BAND = 1
+
 -- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
 -- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
 -- which by polarization is the direction they are themselves aiming ("you are exposed exactly where

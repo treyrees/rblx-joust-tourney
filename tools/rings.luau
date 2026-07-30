@@ -30,6 +30,7 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 
 -- ---- args --------------------------------------------------------------------------------------
 local topN, showAll, onlyRing = 12, false, nil :: string?
+local notches, anchored = 4, false
 do
 	local args = process.args
 	local i = 1
@@ -43,38 +44,82 @@ do
 		elseif args[i] == "--ring" then
 			onlyRing = args[i + 1]
 			i += 2
+		elseif args[i] == "--notches" then
+			notches = tonumber(args[i + 1]) or notches
+			i += 2
+		elseif args[i] == "--shield-band" then
+			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
+			i += 2
+		elseif args[i] == "--anchored" then
+			-- Let each rider also choose WHICH of their ring's crit notches their aim occupies: the
+			-- same threat with the exposure laid out differently around it.
+			anchored = true
+			i += 1
 		else
 			i += 1
 		end
 	end
 end
 
+-- A ring with more notches than four needs more direction names. The shipped four keep their
+-- self-relative names; anything else is generated, since only the tool ever sees them.
+if notches ~= 4 then
+	local cycle = {}
+	for i = 1, notches do
+		cycle[i] = "n" .. tostring(i - 1)
+	end
+	Constants.CYCLE = cycle
+	Constants.RING = {}
+	for i = 0, notches - 1 do
+		Constants.RING[i] = "normal"
+	end
+end
+
 -- ---- the strategy space ------------------------------------------------------------------------
 -- One rider's whole commitment, minus the hold fraction: a Shield direction and an Aim direction,
 -- each of the four plus neutral. Neutral is included on both axes because §3 insists both are legal.
-type Strat = { shield: string, aim: string, holdFraction: number }
-local ALL_DIRS = { D.IN, D.OUT, D.UP, D.DOWN, D.NEUTRAL }
+type Strat = { shield: string, aim: string, holdFraction: number, anchor: number }
+local ALL_DIRS = {}
+for _, dir in Constants.CYCLE do
+	table.insert(ALL_DIRS, dir)
+end
+table.insert(ALL_DIRS, D.NEUTRAL)
 
 local STRATS: { Strat } = {}
-for _, shield in ALL_DIRS do
-	for _, aim in ALL_DIRS do
-		table.insert(STRATS, { shield = shield, aim = aim, holdFraction = 1 })
+local N = 0
+
+local function buildStrats(critNotches: { number })
+	STRATS = {}
+	local anchors = if anchored and #critNotches > 0 then critNotches else { 0 }
+	for _, shield in ALL_DIRS do
+		for _, aim in ALL_DIRS do
+			for _, anchor in anchors do
+				table.insert(STRATS, { shield = shield, aim = aim, holdFraction = 1, anchor = anchor })
+			end
+		end
 	end
+	N = #STRATS
 end
-local N = #STRATS
 
 local function stratName(s: Strat): string
-	return string.format("shield %s / aim %s", s.shield, s.aim)
+	return string.format("shield %s / aim %s / anchor %d", s.shield, s.aim, s.anchor)
 end
 
 -- ---- ring enumeration --------------------------------------------------------------------------
 local function ringCode(r: { [number]: string }): string
-	return LETTER[r[0]] .. LETTER[r[1]] .. LETTER[r[2]] .. LETTER[r[3]]
+	local s = ""
+	for i = 0, notches - 1 do
+		s ..= LETTER[r[i]]
+	end
+	return s
 end
 
 local function parseRing(code: string): { [number]: string }
+	if #code ~= notches then
+		error(string.format("ring code %q has %d letters but --notches is %d", code, #code, notches))
+	end
 	local r = {}
-	for i = 0, 3 do
+	for i = 0, notches - 1 do
 		local cls = FROM_LETTER[code:sub(i + 1, i + 1):upper()]
 		if not cls then
 			error("bad ring code: " .. code .. " (letters must be C, G or N)")
@@ -87,11 +132,18 @@ end
 -- Mirroring a ring swaps the two perpendicular offsets. A ring and its mirror are the same game with
 -- the handedness flipped, so only one of each pair is worth solving.
 local function mirrorCode(code: string): string
-	return code:sub(1, 1) .. code:sub(4, 4) .. code:sub(3, 3) .. code:sub(2, 2)
+	local s = code:sub(1, 1)
+	for i = #code, 2, -1 do
+		s ..= code:sub(i, i)
+	end
+	return s
 end
 
+-- The full space is 3^notches, which is only worth enumerating at four. Larger rings are examined
+-- one at a time via --ring, since the interesting eight-notch rings are all doublings of a
+-- four-notch one rather than arbitrary colourings.
 local RINGS: { { [number]: string } } = {}
-do
+if notches == 4 then
 	local seen: { [string]: boolean } = {}
 	for _, a in CLASSES do
 		for _, b in CLASSES do
@@ -107,6 +159,8 @@ do
 			end
 		end
 	end
+elseif not onlyRing then
+	error(string.format("--notches %d needs an explicit --ring CODE (%d letters)", notches, notches))
 end
 
 -- ---- payoff ------------------------------------------------------------------------------------
@@ -169,9 +223,14 @@ type Report = {
 }
 
 local function analyse(r: { [number]: string }): Report
-	for i = 0, 3 do
+	local critNotches: { number } = {}
+	for i = 0, notches - 1 do
 		Constants.RING[i] = r[i]
+		if r[i] == "crit" then
+			table.insert(critNotches, i)
+		end
 	end
+	buildStrats(critNotches)
 
 	-- payoff matrix, plus the tier pair for each cell so the equilibrium's texture is measurable
 	local M: { { number } } = table.create(N)
@@ -289,9 +348,14 @@ local function analyse(r: { [number]: string }): Report
 		end
 	end
 
-	-- Chirality is a property of the ring alone: exactly one of the two perpendicular offsets is a
-	-- crit. It is the only way a four-ring can ever produce a one-sided crit.
-	local chiral = (r[1] == "crit") ~= (r[3] == "crit")
+	-- Chirality is a property of the ring alone: some offset is a crit while its negation is not.
+	-- That is the only way a ring of any size can ever produce a one-sided crit.
+	local chiral = false
+	for off = 0, notches - 1 do
+		if (r[off] == "crit") ~= (r[(notches - off) % notches] == "crit") then
+			chiral = true
+		end
+	end
 
 	return {
 		code = ringCode(r),
