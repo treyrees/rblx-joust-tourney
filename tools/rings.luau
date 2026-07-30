@@ -280,6 +280,8 @@ type Report = {
 	fullEdge: number, -- Balance points a clairvoyant gains over the equilibrium player
 	aimEdge: number, -- ...knowing only the televised Aim, which is what a real opponent sees
 	exploit: number, -- how far the solved mix still is from equilibrium; near 0 or the row is noise
+	priorBits: number, -- uncertainty about the Shield before seeing anything
+	residBits: number, -- ...and after seeing the televised aim. The hole card's actual information.
 	critRate: number,
 	mutualCrit: number, -- share of crits that are traded rather than landed one-sided
 	blockRate: number,
@@ -361,6 +363,41 @@ local function analyse(r: { [number]: string }): Report
 				bare
 			))
 		end
+	end
+
+	-- How much the televised aim gives away about the hidden Shield, in bits. H(Shield) is what an
+	-- opponent faces before the run-up; H(Shield | aim) is what survives once the rider has pointed.
+	-- The gap is the leak. This is "hints but does not reveal" stated as a number rather than a hope.
+	local function entropy(w: { [string]: number }, total: number): number
+		local h = 0
+		for _, v in w do
+			if v > 0 then
+				local q = v / total
+				h -= q * math.log(q, 2)
+			end
+		end
+		return h
+	end
+
+	local shieldMass: { [string]: number } = {}
+	local byAim: { [string]: { mass: number, sh: { [string]: number } } } = {}
+	for i = 1, N do
+		if p[i] > 0 then
+			local st = STRATS[i]
+			shieldMass[st.shield] = (shieldMass[st.shield] or 0) + p[i]
+			local slot = byAim[st.aim]
+			if not slot then
+				slot = { mass = 0, sh = {} }
+				byAim[st.aim] = slot
+			end
+			slot.mass += p[i]
+			slot.sh[st.shield] = (slot.sh[st.shield] or 0) + p[i]
+		end
+	end
+	local priorBits = entropy(shieldMass, 1)
+	local residBits = 0
+	for _, slot in byAim do
+		residBits += slot.mass * entropy(slot.sh, slot.mass)
 	end
 
 	-- Solver self-check. At a true equilibrium no pure strategy beats the mix, so the best response's
@@ -479,6 +516,8 @@ local function analyse(r: { [number]: string }): Report
 		fullEdge = fullEdge,
 		aimEdge = aimEdge,
 		exploit = exploit,
+		priorBits = priorBits,
+		residBits = residBits,
 		critRate = crits,
 		mutualCrit = if crits > 0 then mutual / crits else 0,
 		blockRate = blocks / strikes,
@@ -528,7 +567,7 @@ table.sort(reports, function(x, y)
 	return rank(x) > rank(y)
 end)
 
-print("ring   chiral  top-wt  supp  read-edge  aim-edge  hole-card   crit%  mutual-crit%  block%  exploit")
+print("ring   chiral  top-wt  supp  read-edge  aim-edge  hole-card   crit%  mutual-crit%  block%  exploit  shield-bits(before>after)")
 print(string.rep("-", 101))
 local shown = 0
 for _, rep in reports do
@@ -546,7 +585,7 @@ for _, rep in reports do
 			100 * rep.mutualCrit,
 			100 * rep.blockRate,
 			rep.exploit
-		))
+		) .. string.format("  %.2f > %.2f", rep.priorBits, rep.residBits))
 		shown += 1
 	end
 end
