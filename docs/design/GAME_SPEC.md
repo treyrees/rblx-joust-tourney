@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001, 0002, 0004, 0005]
+decisions: [0001, 0002, 0004, 0006, 0007, 0008, 0009]
 owner: trey
 updated: 2026-07-30
 ---
@@ -44,41 +44,58 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
 
 ## 3. The pass (the core mechanic)
 
-**Directions:** four, self-relative — **in / out / up / down** (self-relative framing avoids the
-mirrored-pass left/right ambiguity) — plus **neutral**, a legitimate state and the default.
+**Directions:** a **four-direction basis** — self-relative **in / out / up / down** (self-relative
+framing avoids the mirrored-pass left/right ambiguity) — played on an **eight-notch wheel** (the
+four diagonals between them; ADR 0006), plus **neutral**, a legitimate state and the default. The
+four cardinals remain the words the design speaks; the diagonals are granularity.
 
-**Phase 1 — Intermission (private commit):** pick your **Shield** direction. Hidden until impact.
+**Phase 1 — Intermission (private commit):** place your **Shield**, a two-notch (90°) plate on the
+wheel. Hidden until impact — the hole card.
 
-**Phase 2 — Run-up (one public input):** steer the **spear aim** on a circular touch wheel
-("iPod wheel"), **quantized to the four sectors** with hard snapping (the televised state is always
-one of four clean values; the spear may animate smoothly between them, the *state* is discrete).
-Aim is fully televised to the opponent and spectators.
+**Phase 2 — Run-up (one public allocation):** steer the **spear aim** on a circular touch wheel
+("iPod wheel"), **quantized to the eight notches** with hard snapping (the televised state is always
+one of eight clean values; the spear may animate smoothly between them, the *state* is discrete).
+Aim is fully televised. Every run-up second is spent one of two ways — **holding an aim** (charging
+the strike) or **spurring in neutral** (banking momentum, one tap per hoofbeat; ADR 0007) — and both
+meters are public.
 
-- **Polarization (automatic):** your **Guard** is always opposite your aim. Aim out → Guard in.
-  One input carries attack AND defense; you cannot aim at their weakness without configuring your own
-  exposure. (For Honor's turtling failure is dodged because defense is never free or independent.)
-- **The Crit (automatic):** the direction opposite your Guard, which by polarization is *identically
-  your own aim direction*. It is where a strike lands at triple damage if your Shield is not there.
-  Aim and Crit are one direction named for opposite purposes — where you threaten, and where you are
-  exposed. "You are exposed exactly where you strike."
+- **The ring (automatic; ADR 0006):** your aim drags a fixed pattern around the wheel — you are
+  **exposed** at the notch you strike with and for two more notches sweeping to one side (135°),
+  your **Guard** is a one-notch (45°) block directly opposite, and the rest is ordinary. "You are
+  exposed exactly where you strike — and one turn around." The lopsidedness is the point: the ring
+  is **chiral**, so a correct read can land a crit that is *not* traded back.
+- **Polarization (automatic):** the Guard is always directly opposite the aim. One input carries
+  attack AND defense; you cannot aim at their weakness without configuring your own exposure. (For
+  Honor's turtling failure is dodged because defense is never free or independent.)
+- **The hole card is the gap:** exposure is three notches, the Shield covers two — something is
+  always bare, and *which* is the one secret in the pass. The televised aim narrows the Shield to a
+  coin flip and no further (~1 bit survives; ADR 0006).
 - **Neutral is the opening state for everyone** — so the spawn frame leaks nothing, and *when you
   first leave neutral is itself a tell* (bet-timing; the run-up has poker streets for free).
 
-**The two bonuses (priced signaling):**
-- **Defensive bonus — binary:** awarded iff the Guard (opposite of final aim) lands on the Shield at
-  the tick — a **Supershield**. Supershield = one direction defended deeply, with your Crit left bare;
-  any other placement covers two directions thinly and earns no bonus. **Depth-vs-breadth is a named
-  strategic axis** — and which pole is correct is still open (§12).
-- **Offensive bonus — prorated:** scales with the fraction of the run-up you held your *final* aim
-  direction. The buildup meter is **public** — the crowd watches your commitment charge. A late
-  switch is the bluff, and it has a mechanical price (reset buff = weaker strike), not just an
+**What the two run-up currencies buy (ADR 0008):**
+- **Held aim — proration, paying NOW:** the strike scales with the fraction of the run-up the
+  *final* aim was held. The buildup meter is **public** — the crowd watches your commitment charge.
+  A late switch is the bluff, and it has a mechanical price (reset buff = weaker strike), not just an
   informational one. **Proration curve: linear** (ADR 0001). The floor+ease-in lean recorded here
   originally was overturned by the sim: a floor collapses a half-held aim to within a point of a pure
   last-instant flick, which turns the bluffing spectrum into a binary. Linear keeps the meter
   readable as a dial and still costs the flicker 8 points of win rate.
+- **Spurred momentum — breaking, paying LATER:** a landed strike carrying enough momentum **breaks**
+  the slice it hit, degrading it one rung for the rest of the match (`guard → normal → crit →
+  mortal`). Breaks anchor to world directions, so they are permanent holes the defender must steer
+  around. Spurring is the only line that pays when your read was wrong — crashing into their guard
+  at speed still breaks it.
+- **Defensive bonus — binary, and held (ADR 0009):** a **Supershield** — clean block plus a small
+  restore — iff the Shield covers the Guard *and* the aligning aim was genuinely held (defence is
+  prorated like offence; a last-instant flick into alignment earns nothing). At full Balance the
+  Supershield is dormant — covering exposure is simply better — and below ~85 Balance it takes over
+  on its own: depth is the hurt rider's game, breadth the healthy rider's, and the public Balance
+  meter tells everyone which game each rider is in.
 
-**Information architecture (three layers):** public offense meter + televised aim → derived Guard and
-Crit → hidden Shield (the hole card), revealed at impact. Every pass is a readable poker hand.
+**Information architecture (three layers):** public offense + momentum meters + televised aim →
+derived ring (exposure and Guard) → hidden Shield (the hole card), revealed at impact. Every pass is
+a readable poker hand.
 
 **Guardrails:**
 - **Aim locks a few tenths before the tick** — decision timing, never a ping war (UBG's ping meta is
@@ -86,29 +103,33 @@ Crit → hidden Shield (the hole card), revealed at impact. Every pass is a read
 - **Beginners must be able to ignore every layer** — Shield somewhere + aim somewhere is complete,
   legal jousting (those two are the only inputs; Guard and Crit are derived for you). The signaling game is emergent depth, never required literacy. Protect this in tuning.
 
-**Neutral baseline (settled by ADR 0001):**
+**Neutral baseline (settled by ADR 0001; spur added by ADR 0007):**
 1. Neutral aim at the tick → weak center strike, no crit potential, zero honesty buff
-   (survivable, not viable). In the sim, neutral-camping ranks last of nine strategies.
+   (survivable, not viable). In the sim, neutral-camping ranks last of twelve strategies.
 2. Neutral Guard → none (maximally soft; cageyness is priced by softness + proration tax).
 3. Neutral as a Shield → legal, and it covers nothing. It cannot supershield, so it forfeits the
    defensive bonus and leaves coverage at a single direction: a real option that is never a good one.
 
 ## 4. Resolution: the matrix, Balance, and the unhorse roll
 
-> Implemented and pinned: [pass/RESOLUTION.md](pass/RESOLUTION.md) is the deep doc, ADR 0001 the
-> decision. The crit keys off the **Guard**, not the hidden Shield, so the rule reads *you are exposed
-> exactly where you strike*; a crit is 3x a normal.
+> Implemented and pinned: [pass/RESOLUTION.md](pass/RESOLUTION.md) is the deep doc; ADR 0001 pinned
+> the original numbers, ADR 0006 the ring and the re-pinned scale. The crit keys off the **ring**,
+> not the hidden Shield, so the rule reads *you are exposed exactly where you strike, and one turn
+> around*; a crit is 3x a normal.
 
-**The matrix beat (deterministic — the gameable layer):** aim vs Shield/Guard resolves to an outcome tier —
-**blocked / normal / crit** (crit = struck opposite your Guard). Tiers translate to **Balance
-damage**, modified by lance stats, honesty bonus, cracked Shields, and abilities. A clean block grants
-the defender a small Balance restore (blocking is a win, not a non-loss) — capped well below typical
-hit damage so convergence never stalls.
+**The matrix beat (deterministic — the gameable layer):** aim vs the defender's ring (and Shield)
+resolves to an outcome tier — **blocked / normal / crit / mortal** (crit = struck on an uncovered
+exposure notch; mortal = the same, on a slice broken three times — unhorsed, **no roll at all**).
+Tiers translate to **Balance damage**, modified by lance stats, honesty bonus, breaks, and
+abilities. A clean block grants the defender a small Balance restore (blocking is a win, not a
+non-loss) — capped well below typical hit damage so convergence never stalls.
 
 **The roll beat (the slot machine):** both riders carry a public **Balance meter (0–100)**. Anyone hit
 this pass **rolls against current Balance to stay mounted** — at 80 Balance, 80% stay-on. The roll is
 diegetic: the rider **teeters in slow motion** with the live percentage shown, and recovers or goes
 into the dirt. **Unhorsed = match over.** The teeter-and-recover at low odds is the signature clip.
+The mortal end is its opposite and complement: the one finish the dice cannot touch, arriving only
+after three telegraphed breaks — the endgame belongs to reads, not rolls (ADR 0008).
 
 **Why this shape:** converges by construction (Balance only trends down; tune for 3–5 passes average);
 anyone can win any pass (upsets are jackpots, not bugs); RNG is exactly where intended and printed on
@@ -126,11 +147,12 @@ matter more than the dice on average, or the read game dies and it's only a slot
 ## 5. Escalation & win condition
 
 - Balance attrition is the primary convergence engine (§4).
-- **Depleting coverage (candidate, favored):** each direction's coverage takes armor damage when
-  struck; repeatedly defended directions crack, then break for the match. Forces conclusion
-  mechanically AND generates escalating information (a broken up-side narrows your real options —
-  later passes get sharper reads exactly when the match needs to end). Imports UBG's "defense is a depleting
-  resource, never a safe default."
+- **Depleting coverage — settled as Breaking (ADR 0008):** the trigger moved from being-struck to
+  attacker momentum, so it is a currency you *buy* with run-up time rather than a side effect.
+  Repeatedly broken directions still force conclusion mechanically AND generate escalating
+  information (a broken up-side narrows your real options — later passes get sharper reads exactly
+  when the match needs to end). Imports UBG's "defense is a depleting resource, never a safe
+  default", with the ladder ending at the mortal rung.
 - Optional dramatic layers: rising per-pass wager (Snap-style raise/yield — diegetic as raising the
   lance / yielding before the charge), shortened aim window in sudden death.
 
@@ -219,19 +241,18 @@ elimination stakes, the craft web as the front door.
   settled by ADR 0001. What replaces them: the hold-fraction *distribution* real players produce. The
   sim's riders hold fixed fractions, so it cannot speak to this, and it is the most likely reason to
   reopen the curve.
-- Depleting coverage: confirm as the escalation mechanism; tune crack/break thresholds. These change
-  the coverage rule, so they need their own ADR and their own sim run.
-- **The Supershield's magnitudes** — ADR 0005 settles that the Supershield pays offense as well as
-  defense (flat, additive with proration), because on ADR 0001's numbers the *axis* shape outranks it
-  by 7.5 points of win rate and even beats the `oracle`. It deliberately pins **no number**. Three are
-  open and all three are `combat-axis`: `THIN_BLOCK_MULT`, `SUPERSHIELD_RESTORE`, and the size of the
-  Supershield's strike bonus. Two things the sim must catch when they land: whether convergence stays
-  in the 3–5 pass band, and the mutual-Supershield-on-opposite-directions case, where both riders
-  clean block, both take the restore, nobody rolls, and Balance goes *up* for both.
-- **The aim distribution real players produce** — the Supershield's whole liability is a bare Crit, so
-  its value moves with how often opponents actually aim there. The sim's riders use fixed aim
-  policies, so it cannot answer this; it is the same blind spot as the hold-fraction distribution
-  above, and it is what will reopen ADR 0005's numbers.
+- ~~Depleting coverage~~ / ~~the Supershield's magnitudes~~ — settled by ADR 0008 (Breaking, with
+  momentum as the trigger and the mortal rung) and ADR 0009 (the Supershield is a state, not a
+  price; 0005 superseded — its motivating anomaly was an instrument artifact, and no bonus can
+  produce a mixed placement equilibrium). What replaces them:
+  - **The ladder length and the momentum threshold** (`BREAK.MOMENTUM_THRESHOLD`, three-breaks-to-
+    mortal): mortal currently ends ~0.8% of strikes. Whether it should be a rarity or an endgame
+    clock is a gray-box question; shorten the ladder, not the threshold, if it moves.
+  - **The spur's feel** — momentum is the entire "later" axis, and no headless instrument can test a
+    thumb on a beat gate. First thing the gray box must validate by hand.
+- **The aim distribution real players produce** — the sim's riders use fixed aim policies; the real
+  distribution is the same blind spot as the hold-fraction one above, and it is what would reopen
+  ADR 0006's scale or ADR 0008's threshold.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
 - ~~Matchmaking: trophy gating vs stakes rooms~~ — settled by ADR 0002 with a third option neither

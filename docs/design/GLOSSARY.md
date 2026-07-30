@@ -1,56 +1,62 @@
 ---
-maps-to: [src/shared/PassResolver.luau, src/shared/Constants.luau#MATRIX]
-decisions: [0004]
+maps-to: [src/shared/PassResolver.luau, src/shared/Constants.luau#MATRIX, src/shared/Constants.luau#BREAK]
+decisions: [0004, 0006, 0008, 0009]
 owner: trey
 updated: 2026-07-30
 ---
 
 # GLOSSARY — the words the pass is played in
 
-> The pass has four load-bearing nouns. This doc is the one place they are defined, and the ledger of
-> the names they replaced. [GAME_SPEC.md](GAME_SPEC.md) §3 owns the *design*;
+> The pass has a small set of load-bearing nouns. This doc is the one place they are defined, and the
+> ledger of the names they replaced. [GAME_SPEC.md](GAME_SPEC.md) §3 owns the *design*;
 > [pass/RESOLUTION.md](pass/RESOLUTION.md) owns the *rule as implemented*; this owns the *vocabulary*.
 >
 > Why a glossary this early: GAME_SPEC §2 makes the creator/meta layer a design target rather than a
 > byproduct, and that layer runs on shared words. A matchup chart that fits in a thumbnail needs terms
 > that fit in a thumbnail, and it needs everyone using the same ones. Fixed by
-> [ADR 0004](decisions/0004-shield-guard-crit-vocabulary.md).
+> [ADR 0004](decisions/0004-shield-guard-crit-vocabulary.md); geometry updated by
+> [ADR 0006](decisions/0006-the-ring-eight-notches-chirality.md).
 
 ## The live vocabulary
 
 | Term | Chosen when | Visible? | Definition |
 |---|---|---|---|
-| **Shield** | Intermission, pre-round | **Hidden** until impact | The one direction you commit before the pass. The hole card — the only hidden value in the entire pass. |
-| **Aim** | Run-up | Televised | The spear direction, quantized to one of four sectors (+ neutral). Where you threaten. |
-| **Guard** | Derived | Public (follows the Aim) | Always the opposite of your Aim. Polarization: one input carries attack and defense together. |
-| **Crit** | Derived | Public (follows the Aim) | The direction opposite your Guard — which is identically your Aim direction. Where *you* are exposed. Struck there and uncovered, a strike lands at `CRIT_DAMAGE`. |
-| **Supershield** | Derived | Hidden (needs the Shield) | Your Guard landing on your Shield. Two defenses deep on one direction: the clean block plus a restore. |
+| **Shield** | Intermission, pre-round | **Hidden** until impact | A two-notch (90°) plate placed on the wheel before the pass. The hole card — the only hidden value in the entire pass. |
+| **Aim** | Run-up | Televised | The spear direction, quantized to one of eight notches (+ neutral). Where you threaten. |
+| **Ring** | Derived | Public (follows the Aim) | The fixed pattern your Aim drags around the wheel: exposed at the Aim and two notches sweeping on (135°), Guard opposite, the rest ordinary. Chiral — the danger hangs off one side of your spear. |
+| **Guard** | Derived | Public (follows the Aim) | The one-notch (45°) block always directly opposite your Aim. Polarization: one input carries attack and defense together. |
+| **Crit** | Derived | Public (follows the Aim) | The three exposed notches of your ring. Where *you* are vulnerable. Struck there and uncovered, a strike lands at `CRIT_DAMAGE`. "You are exposed exactly where you strike — and one turn around." |
+| **Supershield** | Derived | Hidden (needs the Shield) | Your Shield covering your Guard, with the aligning Aim genuinely held. Two defenses deep on one direction: the clean block plus a restore. Dormant at full Balance; the hurt rider's line (ADR 0009). |
+| **Spur** | Run-up, in neutral | Public (the momentum meter) | One tap per hoofbeat while aiming neutral banks **Momentum**. Time spent spurring is time not spent holding an aim (ADR 0007). |
+| **Break** | On impact | Public | A landed strike carrying enough Momentum degrades the world direction it hit, one rung, for the match: `guard → normal → crit → mortal` (ADR 0008). |
+| **Mortal** | Derived (three Breaks) | Public | The rung below crit. Struck there uncovered, the rider is unhorsed with **no roll drawn** — the one finish the dice cannot touch. |
 
 Three consequences worth stating in the same breath as the definitions, because they are what make the
 vocabulary worth having:
 
-- **Aim and Crit are the same direction**, named for opposite purposes. `aim` is where this rider
-  threatens; `crit` is where this rider is exposed. "You are exposed exactly where you strike."
+- **Your Aim is inside your own Crit.** The spear's notch is the first exposed notch — threatening
+  and being threatened are the same gesture, one turn apart.
 - **The Shield is the only hidden value**, so every *tell* in the game is evidence about the Shield.
-  The Guard is where you look; the Shield is probably there too.
+  Three exposed notches, a two-notch plate: the whole secret is *which notch stayed bare*, and the
+  televised Aim narrows it to a coin flip, never further.
 - **A clean block and a Crit are mutually exclusive in one pass.** A clean block needs the attacker to
-  aim into your Guard; hitting their Crit needs your Aim (and so your own Crit) pointed the other way.
-  Both fall out of coverage and Crit being derived from the same single Aim input, so no tuning can
-  make the two coincide.
+  aim into your Guard; hitting their Crit needs your Aim pointed into their exposure. Both fall out of
+  coverage and Crit being derived from the same single Aim input, so no tuning can make the two
+  coincide.
 
 ## The three defensive shapes
 
-The Shield has four placements, but only three distinct shapes relative to a given Aim:
+The plate covers at most two of your three exposed notches:
 
-| Shape | Shield goes | What you get |
+| Shape | Shield goes | What stays bare |
 |---|---|---|
-| **Supershield** | on your Guard | 1 clean block (+restore), your Crit bare, 2 normals |
-| **Axis** | on your Crit | 2 thin blocks, no Crit at all, 2 normals |
-| **Split** | on the other axis | 2 thin blocks, your Crit bare, 1 normal |
+| **Forward** | on your Aim | the far edge of your exposure |
+| **Back** | one notch on | the tip of your own spear |
+| **Deep** (Supershield) | on your Guard | your whole exposure — bought with the clean block and restore |
 
-Depth versus breadth, as GAME_SPEC §3 names it. Which of these is *correct* is a live tuning question
-tracked in GAME_SPEC §12, not a settled fact — see
-[ADR 0005](decisions/0005-supershield-pays-offense.md).
+Forward-or-back is the healthy game and the ~1-bit guess. Deep is the hurt game: below ~85 Balance it
+takes over on its own. Depth versus breadth is **resolved, not balanced** — settled by
+[ADR 0009](decisions/0009-defence-is-prorated-supershield-is-state.md), which supersedes ADR 0005.
 
 ## Retired-term ledger
 
@@ -68,6 +74,8 @@ history and this table defines the terms.
 | `punished` (tier) | **crit** (tier) | ADR 0004 |
 | `PUNISHED_DAMAGE` | `CRIT_DAMAGE` | ADR 0004 |
 | `STACK_BLOCK_RESTORE` | `SUPERSHIELD_RESTORE` | ADR 0004 |
+| `axis` / `split` (shapes) | **forward** / **back** | ADR 0006 |
+| `cracked` / `cracking` | **broken** / **Breaking** | ADR 0008 |
 
 Only the unambiguous multi-word terms are in `RETIRED_VOCAB`. `stack` / `stacked` / `stacking` are
 deliberately left out: they are ordinary English elsewhere in these docs ("a stack of small merged

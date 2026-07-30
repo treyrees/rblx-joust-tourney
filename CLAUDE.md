@@ -10,14 +10,18 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
 
 1. **Reads beat rarity.** Reads resolve deterministically; survival resolves stochastically; rarity
    loads the dice — and a correct read always beats a rarer horse. (GAME_SPEC §4.)
-2. **Four directions are the core gameplay, neutral is the default.**; archetype identity hooks neutral or the UI layer. (GAME_SPEC §7.)
+2. **Four directions are the core gameplay basis, neutral is the default.** The wheel is played at
+   eight notches (ADR 0006), but in/out/up/down remain the words; archetype identity hooks neutral
+   or the UI layer. (GAME_SPEC §7.)
 3. **One tick per pass, simultaneous resolution.** Both commitments snapshot, resolve at once, no
-   order bias. Server-authoritative; client is display-only during resolution.
-4. **Aim state is quantized** to the four sectors (+ neutral). Animation may be smooth; the televised
+   order bias. Server-authoritative; client is display-only during resolution. The run-up has no
+   inner tick — aim is event-driven, hold is a time integral (ADR 0007).
+4. **Aim state is quantized** to the eight notches (+ neutral). Animation may be smooth; the televised
    state is always discrete. Aim locks shortly before the tick — no ping wars.
-5. **Beginner-ignorable depth.** Shield somewhere + aim somewhere is complete, legal play — those two
-   are the only inputs; Guard and Crit are derived (ADR 0004, [docs/design/GLOSSARY.md](docs/design/GLOSSARY.md)). No layer
-   (signaling, proration, archetypes) may become required literacy at low ranks.
+5. **Beginner-ignorable depth.** Shield somewhere + aim somewhere is complete, legal play — plus an
+   optional spur tap; everything else (ring, Guard, Crit, breaking) is derived (ADR 0004/0006/0008,
+   [docs/design/GLOSSARY.md](docs/design/GLOSSARY.md)). No layer (signaling, proration, archetypes)
+   may become required literacy at low ranks.
 6. **RNG is always visible.** Odds on screen before the roll; every loss decomposes to "read" or
    "roll." No mystery randomness, ever.
 7. **The matrix outweighs the dice on average.** If tuning ever makes neutral-camping or pure

@@ -2,9 +2,9 @@
 id: 0005
 title: The Supershield pays offense as well as defense — the committed lance
 date: 2026-07-30
-status: accepted
+status: superseded
 supersedes: []
-superseded-by: null
+superseded-by: 0009
 combat-axis: false
 ---
 

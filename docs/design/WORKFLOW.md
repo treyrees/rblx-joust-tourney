@@ -1,8 +1,8 @@
 ---
-maps-to: [tools/design-lint.luau, tests/run.luau, tools/sim.luau, .github/workflows/gates.yml]
+maps-to: [tools/design-lint.luau, tests/run.luau, tools/sim.luau, tools/rings.luau, .github/workflows/gates.yml]
 decisions: []
 owner: trey
-updated: 2026-07-29
+updated: 2026-07-30
 ---
 
 # WORKFLOW — how we work (the stewardship loop)
@@ -34,8 +34,11 @@ being current. That is the entire discipline; everything below is how you uphold
      about an old decision? A *new* ADR with `supersedes: [N]`, and set the old one's
      `superseded-by`. **Never rewrite an ADR** — you supersede history, you don't edit it.
    - *Touching a balance/tuning axis?* Mark the ADR `combat-axis: true` and **cite a sim run** in its
-     `## Consequences` — decide *after* the tool, not before. The M1 pass-simulator is that tool
-     here; `design-lint` enforces the citation. Not tuning? `combat-axis: false`.
+     `## Consequences` — decide *after* the tool, not before. Two instruments with complementary
+     blind spots: `tools/sim.luau` (whole matches, scripted riders) and `tools/rings.luau` (one-pass
+     equilibrium; catches exploits scripted riders never find — it once failed a configuration the
+     round robin green-lit). Combat-axis ADRs on the pass surface should cite both. `design-lint`
+     enforces the citation. Not tuning? `combat-axis: false`.
 3. **Build in `src/`** to the design. Honor the [CLAUDE.md invariants](../../CLAUDE.md).
    **Constants are the single source of truth** — never hardcode a tuning number.
 4. **Re-sync the doc↔code seam.** In the living doc you touched: add any new files to `maps-to`, and
