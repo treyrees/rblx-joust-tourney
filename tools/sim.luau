@@ -30,7 +30,12 @@ local FOUR: { string } = {}
 local MAX_PASSES = 30 -- a match this long is a convergence failure, and is reported as one
 
 -- ---- args --------------------------------------------------------------------------------------
-local matches, seed = 20000, 20260729
+-- 8000 matches per pairing over 55 pairings is ~440k matches: ample for verdicts whose thresholds
+-- are coarse (a 3-5 pass band, a 75% read edge, a 50% long-shot share, a rank). The default was
+-- 20000, chosen when the round robin was 36 pairings and the oracle searched four aims instead of
+-- every aim-and-shield pair; at that size the gate had grown to over two minutes. Pass --matches for
+-- a tighter run when pinning a number.
+local matches, seed = 8000, 20260729
 do
 	local args = process.args
 	local i = 1
