@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001, 0002, 0004, 0005]
+decisions: [0001, 0002, 0003, 0004, 0005]
 owner: trey
 updated: 2026-07-30
 ---
@@ -183,7 +183,8 @@ Horses across rarity tiers (the vertical/tycoon chase, the dice-loader per §4's
 the horizontal playstyle spread (equip via native hotbar). v1 can be embarrassingly small: a handful
 of horses × 3 rarities, 3–4 lances with distinct matrix-tilts. The acquisition loop (currency faucet,
 gacha/eggs/breeding, any idle/stable-tending layer) is **undesigned** — it is the D1 half of the game
-and needs its own design session (see §12). Launch with a deliberately debatable tier list: games
+and needs its own design session (see §12) — though its commercial skeleton is now settled by
+[chase/MONETIZATION.md](chase/MONETIZATION.md) (ADR 0003). Launch with a deliberately debatable tier list: games
 that ship with an arguable meta get their first content wave made for them.
 
 ## 10. Scope doctrine: three things (plus Thing 0)
@@ -234,6 +235,10 @@ elimination stakes, the craft web as the front door.
   above, and it is what will reopen ADR 0005's numbers.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
+  Monetization structure is settled (ADR 0003, [chase/MONETIZATION.md](chase/MONETIZATION.md));
+  still open inside it: faucet sizing, egg odds, ante ladders (now mapped per horse-tier bracket,
+  per ADR 0002), and the rarity→stat curve (the latter needs its own combat-axis ADR + sim run
+  before any egg ships).
 - ~~Matchmaking: trophy gating vs stakes rooms~~ — settled by ADR 0002 with a third option neither
   listed: **horse-tier rooms**. The horse you bring is the room you are in. What replaces it: the
   speed-to-run-up-duration mapping per bracket, which `tools/sim.luau` cannot answer (it resolves
