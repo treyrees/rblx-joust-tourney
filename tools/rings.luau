@@ -32,6 +32,7 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 local topN, showAll, onlyRing = 12, false, nil :: string?
 local notches, anchored, contiguous = 4, false, false
 local guardOpposite = false
+local dumpMix = false
 local sortKey = "read"
 do
 	local args = process.args
@@ -55,6 +56,12 @@ do
 		elseif args[i] == "--sort" then
 			sortKey = args[i + 1] or "read"
 			i += 2
+		elseif args[i] == "--guard-mode" then
+			Constants.GUARD_MODE = args[i + 1]
+			i += 2
+		elseif args[i] == "--dump-mix" then
+			dumpMix = true
+			i += 1
 		elseif args[i] == "--guard-opposite" then
 			-- Readability constraint: the Guard must sit directly across from the attack notch, which
 			-- is what makes polarization intuitive ("you defend away from where you strike").
@@ -314,6 +321,42 @@ local function analyse(r: { [number]: string }): Report
 		end
 		if p[i] > 0 then
 			entropy -= p[i] * math.log(p[i])
+		end
+	end
+
+	-- What the equilibrium actually plays, expressed relative to the rider's own aim so the shape is
+	-- readable: where the Shield sits, whether it earns the Supershield, and how much of the ring's
+	-- exposure it leaves bare.
+	if dumpMix then
+		local rows = {}
+		for i = 1, N do
+			if p[i] > 0.005 then
+				table.insert(rows, { i = i, w = p[i] })
+			end
+		end
+		table.sort(rows, function(a, b)
+			return a.w > b.w
+		end)
+		print("  equilibrium mix (weight >= 0.5%), Shield offset measured from own aim:")
+		for _, row in rows do
+			local st = STRATS[row.i]
+			local off = if st.aim == D.NEUTRAL or st.shield == D.NEUTRAL
+				then nil
+				else PR.offset(st.aim, st.shield)
+			local bare = 0
+			for _, c in PR.crits(st) do
+				if not PR.shielded(st, c) then
+					bare += 1
+				end
+			end
+			print(string.format(
+				"    %5.1f%%  aim %-8s shield %+3s  %-13s  bare crit notches: %d",
+				100 * row.w,
+				if st.aim == D.NEUTRAL then "neutral" else "committed",
+				if off then tostring(off) else "--",
+				if PR.isSupershielded(st) then "SUPERSHIELD" else "",
+				bare
+			))
 		end
 	end
 

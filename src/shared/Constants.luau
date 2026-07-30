@@ -72,6 +72,17 @@ Constants.RING = { [0] = "crit", [1] = "normal", [2] = "guard", [3] = "normal" }
 -- accident.
 Constants.SHIELD_BAND = 1
 
+-- What a Guard notch does on its own.
+--   "block"     — the Guard blocks by itself, and the Shield stacked on it upgrades that block from
+--                 thin to clean. This is the shipped rule, and it makes the Supershield redundant:
+--                 the bonus only ever improves a direction the ring already defended, so it can never
+--                 compete with spending the Shield on an undefended crit notch.
+--   "amplifier" — the Guard defends nothing by itself. It marks where the SHIELD works best: a Shield
+--                 there blocks cleanly and restores, a Shield anywhere else blocks thin, and a Guard
+--                 notch with no Shield on it is an ordinary hit. Defence is never free, and "Shield
+--                 and Guard matching up" becomes the actual source of the bonus rather than a rebate.
+Constants.GUARD_MODE = "block"
+
 -- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
 -- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
 -- which by polarization is the direction they are themselves aiming ("you are exposed exactly where

@@ -59,6 +59,9 @@ do
 				end
 			end
 			i += 2
+		elseif a == "--guard-mode" then
+			Constants.GUARD_MODE = args[i + 1]
+			i += 2
 		elseif a == "--shield-band" then
 			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
 			i += 2

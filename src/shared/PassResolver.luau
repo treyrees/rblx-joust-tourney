@@ -245,7 +245,8 @@ function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 	end
 
 	local class = PassResolver.ringClass(defender, attacker.aim)
-	if class == "guard" or PassResolver.shielded(defender, attacker.aim) then
+	local guardBlocks = Constants.GUARD_MODE ~= "amplifier"
+	if (class == "guard" and guardBlocks) or PassResolver.shielded(defender, attacker.aim) then
 		return "blocked"
 	end
 	if class == "crit" then
@@ -274,7 +275,14 @@ end
 -- A weak (neutral) strike takes no bonus at all — §3 baseline 1's "zero honesty buff".
 function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): (number, Tier)
 	local tier = PassResolver.tier(attacker, defender)
-	local base = PassResolver.baseDamage(tier, PassResolver.isSupershielded(defender))
+	-- A block is clean when the Shield and a Guard notch coincide AT THE STRUCK NOTCH. Under the
+	-- shipped "block" mode the defender-wide test is equivalent, since the Shield-on-Guard notch is
+	-- the only one that can be struck cleanly; under "amplifier" it is not, so ask per strike.
+	local clean = if Constants.GUARD_MODE == "amplifier"
+		then PassResolver.ringClass(defender, attacker.aim) == "guard"
+			and PassResolver.shielded(defender, attacker.aim)
+		else PassResolver.isSupershielded(defender)
+	local base = PassResolver.baseDamage(tier, clean)
 	if base == 0 or tier == "weak" then
 		return base, tier
 	end
