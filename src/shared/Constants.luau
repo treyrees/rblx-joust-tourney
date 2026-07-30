@@ -33,8 +33,8 @@ Constants.DIRECTIONS = {
 	NEUTRAL = "neutral",
 }
 
--- Direction opposition. Polarization (GAME_SPEC §3) derives active guard as the opposite of aim, and
--- the punished tier is "struck opposite your brace" — both read this table, so it is the single place
+-- Direction opposition. Polarization (GAME_SPEC §3) derives the Guard as the opposite of the Aim, and
+-- the Crit direction as the opposite of the Guard — both read this table, so it is the single place
 -- the axis pairing is defined.
 Constants.OPPOSITE = {
 	["in"] = "out",
@@ -44,19 +44,21 @@ Constants.OPPOSITE = {
 	["neutral"] = "neutral",
 }
 
--- The matrix (GAME_SPEC §4): aim vs guards resolves to a tier; tiers translate to Balance damage.
--- WEAK is the neutral-aim strike (§3 neutral baseline 1) — survivable chip, no punish potential, no
--- honesty buff, so cageyness stays legal but never viable.
--- STACK_BLOCK_RESTORE is the defensive bonus (§3): a *stacked* block restores Balance ("blocking is a
--- win, not a non-loss"); a split block merely nullifies. Capped well below NORMAL_DAMAGE so Balance
--- still only trends down across a match and convergence never stalls (§4).
+-- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
+-- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
+-- which by polarization is the direction they are themselves aiming ("you are exposed exactly where
+-- you strike"). WEAK is the neutral-aim strike (§3 neutral baseline 1) — survivable chip, no crit
+-- potential, no honesty buff, so cageyness stays legal but never viable.
+-- SUPERSHIELD_RESTORE is the defensive bonus (§3): a *supershielded* block restores Balance ("blocking
+-- is a win, not a non-loss"); an unsupershielded block merely nullifies. Capped well below
+-- NORMAL_DAMAGE so Balance still only trends down across a match and convergence never stalls (§4).
 Constants.MATRIX = {
 	NORMAL_DAMAGE = 6,
-	PUNISHED_DAMAGE = 18,
+	CRIT_DAMAGE = 18,
 	WEAK_DAMAGE = 2,
-	-- A stacked block is clean: zero damage, plus a restore. A split block is "thin" (§3) — it
+	-- A supershielded block is clean: zero damage, plus a restore. Any other block is "thin" (§3) — it
 	-- nullifies most of the strike but not all of it, and earns no restore.
-	STACK_BLOCK_RESTORE = 2,
+	SUPERSHIELD_RESTORE = 2,
 	THIN_BLOCK_MULT = 0.5,
 }
 

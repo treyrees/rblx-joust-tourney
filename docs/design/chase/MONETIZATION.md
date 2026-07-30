@@ -244,9 +244,9 @@ The single sentence every SKU is checked against (invariant 1): *skill is the tr
 better odds, never immunity to being outplayed.* Concretely, never for sale at any price, in any
 bundle, under any event:
 
-1. **Information**: opponent's passive guard, aim tendencies beyond the public matchup data everyone
+1. **Information**: opponent's Shield, aim tendencies beyond the public matchup data everyone
    gets, any peek not equally available free.
-2. **The matrix**: damage tiers, punish ratios, proration, bonuses.
+2. **The matrix**: damage tiers, crit ratios, proration, bonuses.
 3. **The roll**: no purchased rerolls, no stay-mounted consumables, no revives. (The one-shot
    ability in §6 of the spec may touch rolls — which is exactly why abilities are earned-only.)
 4. **Ranked prestige**: rank cosmetics, titles, laurels are earned-only forever.

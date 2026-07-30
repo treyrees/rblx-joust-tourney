@@ -14,8 +14,8 @@ local PR = roblox.requireShared("PassResolver")
 local D = Constants.DIRECTIONS
 local FOUR = { D.IN, D.OUT, D.UP, D.DOWN }
 
-local function commit(passiveGuard, aim, holdFraction)
-	return { passiveGuard = passiveGuard, aim = aim, holdFraction = holdFraction or 0 }
+local function commit(shield, aim, holdFraction)
+	return { shield = shield, aim = aim, holdFraction = holdFraction or 0 }
 end
 
 local function state(balance: number, recovery: number?)
@@ -31,7 +31,7 @@ end
 
 -- Count the tiers the four real aims produce against one defender.
 local function tierSpread(defender)
-	local spread = { blocked = 0, normal = 0, punished = 0, weak = 0 }
+	local spread = { blocked = 0, normal = 0, crit = 0, weak = 0 }
 	for _, aim in FOUR do
 		local t = PR.tier(commit(D.IN, aim, 1), defender)
 		spread[t] += 1
@@ -40,74 +40,85 @@ local function tierSpread(defender)
 end
 
 kit.describe("PassResolver — polarization (GAME_SPEC §3)", function()
-	kit.it("active guard is always the opposite of aim", function()
+	kit.it("the Guard is always the opposite of the Aim", function()
 		for _, aim in FOUR do
-			kit.expectEqual(PR.activeGuard(commit(D.IN, aim)), Constants.OPPOSITE[aim], "active guard for aim " .. aim)
+			kit.expectEqual(PR.guard(commit(D.IN, aim)), Constants.OPPOSITE[aim], "Guard for aim " .. aim)
 		end
 	end)
 
-	kit.it("a neutral aim yields no active guard (neutral baseline 2 — maximally soft)", function()
-		kit.expectEqual(PR.activeGuard(commit(D.IN, D.NEUTRAL)), D.NEUTRAL)
+	kit.it("a neutral aim yields no Guard (neutral baseline 2 — maximally soft)", function()
+		kit.expectEqual(PR.guard(commit(D.IN, D.NEUTRAL)), D.NEUTRAL)
 	end)
 
-	kit.it("stacking is active-guard == passive-guard, and neutral never stacks", function()
-		-- Aiming OUT puts the active guard IN, so guarding IN passively is the stack.
-		kit.expectEqual(PR.isStacked(commit(D.IN, D.OUT)), true, "aim out + passive in stacks")
-		kit.expectEqual(PR.isStacked(commit(D.UP, D.OUT)), false, "aim out + passive up is a split")
-		kit.expectEqual(PR.isStacked(commit(D.NEUTRAL, D.NEUTRAL)), false, "neutral cannot stack")
+	-- The Crit is opposite the Guard, which by polarization is the rider's own Aim. Asserting the
+	-- round trip rather than trusting the tautology: if polarization is ever rewired (GAME_SPEC §7
+	-- lists inverted-polarization kits as a candidate archetype), this is where it must be re-derived.
+	kit.it("the Crit is opposite the Guard, and therefore identically the rider's own Aim", function()
+		for _, aim in FOUR do
+			local c = commit(D.IN, aim)
+			kit.expectEqual(PR.crit(c), aim, "Crit for aim " .. aim)
+			kit.expectEqual(PR.crit(c), PR.opposite(PR.guard(c)), "Crit is opposite the Guard for aim " .. aim)
+		end
+	end)
+
+	kit.it("supershielding is Guard == Shield, and neutral never supershields", function()
+		-- Aiming OUT puts the Guard IN, so a Shield on IN is the supershield.
+		kit.expectEqual(PR.isSupershielded(commit(D.IN, D.OUT)), true, "aim out + shield in supershields")
+		kit.expectEqual(PR.isSupershielded(commit(D.UP, D.OUT)), false, "aim out + shield up does not")
+		kit.expectEqual(PR.isSupershielded(commit(D.NEUTRAL, D.NEUTRAL)), false, "neutral cannot supershield")
 	end)
 end)
 
 kit.describe("PassResolver — the matrix, enumerated (GAME_SPEC §4)", function()
-	-- Defender aims OUT throughout, so their active guard is IN and their hole is OUT.
-	kit.it("stack: one deep block, one punish hole, two normals", function()
+	-- Defender aims OUT throughout, so their Guard is IN and their Crit is OUT.
+	kit.it("supershield: one clean block, one open Crit, two normals", function()
 		local spread = tierSpread(commit(D.IN, D.OUT))
 		kit.expectEqual(spread.blocked, 1, "blocked")
-		kit.expectEqual(spread.punished, 1, "punished")
+		kit.expectEqual(spread.crit, 1, "crit")
 		kit.expectEqual(spread.normal, 2, "normal")
 	end)
 
-	kit.it("axis guard: covers its own hole — two thin blocks, no punish", function()
+	kit.it("axis: the Shield covers its own Crit — two thin blocks, no crit", function()
 		local spread = tierSpread(commit(D.OUT, D.OUT))
 		kit.expectEqual(spread.blocked, 2, "blocked")
-		kit.expectEqual(spread.punished, 0, "punished")
+		kit.expectEqual(spread.crit, 0, "crit")
 		kit.expectEqual(spread.normal, 2, "normal")
 	end)
 
-	kit.it("split: two thin blocks, but the hole stays open", function()
+	kit.it("split: two thin blocks, but the Crit stays open", function()
 		local spread = tierSpread(commit(D.UP, D.OUT))
 		kit.expectEqual(spread.blocked, 2, "blocked")
-		kit.expectEqual(spread.punished, 1, "punished")
+		kit.expectEqual(spread.crit, 1, "crit")
 		kit.expectEqual(spread.normal, 1, "normal")
 	end)
 
-	kit.it("the punish hole is always the defender's own aim direction", function()
+	kit.it("the Crit is always the defender's own Aim direction", function()
 		for _, aim in FOUR do
-			-- Passive guard placed off-axis so it never covers the hole.
+			-- Shield placed off-axis so it never covers the Crit.
 			local offAxis = if aim == D.IN or aim == D.OUT then D.UP else D.IN
 			local defender = commit(offAxis, aim)
-			kit.expectEqual(PR.tier(commit(D.IN, aim, 1), defender), "punished", "hole for aim " .. aim)
+			kit.expectEqual(PR.tier(commit(D.IN, aim, 1), defender), "crit", "crit for aim " .. aim)
 		end
 	end)
 
-	kit.it("a neutral strike is always weak — never blocked, never a punish", function()
+	kit.it("a neutral strike is always weak — never blocked, never a crit", function()
 		for _, aim in FOUR do
-			for _, passive in FOUR do
-				kit.expectEqual(PR.tier(commit(D.IN, D.NEUTRAL, 1), commit(passive, aim)), "weak")
+			for _, shieldDir in FOUR do
+				kit.expectEqual(PR.tier(commit(D.IN, D.NEUTRAL, 1), commit(shieldDir, aim)), "weak")
 			end
 		end
 	end)
 end)
 
 kit.describe("PassResolver — the two bonuses (GAME_SPEC §3)", function()
-	kit.it("a stacked block is clean (zero damage); a split block is thin, not free", function()
+	kit.it("a supershielded block is clean (zero damage); any other block is thin, not free", function()
 		local M = Constants.MATRIX
-		kit.expectEqual(PR.baseDamage("blocked", true), 0, "stacked block")
+		kit.expectEqual(PR.baseDamage("blocked", true), 0, "supershielded block")
 		kit.expectEqual(PR.baseDamage("blocked", false), M.NORMAL_DAMAGE * M.THIN_BLOCK_MULT, "thin block")
 	end)
 
-	kit.it("the block restore is capped well below a normal hit, so Balance still trends down", function()
-		if Constants.MATRIX.STACK_BLOCK_RESTORE >= Constants.MATRIX.NORMAL_DAMAGE then
+	kit.it("the supershield restore is capped well below a normal hit, so Balance still trends down", function()
+		if Constants.MATRIX.SUPERSHIELD_RESTORE >= Constants.MATRIX.NORMAL_DAMAGE then
 			error("block restore must stay well below normal damage or convergence stalls (§4)")
 		end
 	end)
@@ -163,7 +174,7 @@ kit.describe("PassResolver — the two bonuses (GAME_SPEC §3)", function()
 	end)
 
 	kit.it("the honesty bonus scales a strike, but never a neutral one (zero honesty buff)", function()
-		local defender = commit(D.UP, D.UP) -- axis guard: no punish, so the hit lands normal
+		local defender = commit(D.UP, D.UP) -- axis: no crit, so the hit lands normal
 		local honest = PR.strikeDamage(commit(D.IN, D.IN, 1), defender)
 		local flick = PR.strikeDamage(commit(D.IN, D.IN, 0), defender)
 		if honest <= flick then
@@ -178,16 +189,16 @@ end)
 
 kit.describe("PassResolver — the CLAUDE.md invariants", function()
 	kit.it("invariant 1: a correct read beats the best-case honest normal", function()
-		-- A punish taken with NO honesty bonus must still exceed a normal hit landed with the
+		-- A crit taken with NO honesty bonus must still exceed a normal hit landed with the
 		-- maximum bonus. If tuning ever inverts this, reading correctly stops paying.
 		local axis = commit(D.UP, D.UP)
-		local offAxis = commit(D.UP, D.IN) -- hole open at IN
-		local punish = PR.strikeDamage(commit(D.IN, D.IN, 0), offAxis)
+		local offAxis = commit(D.UP, D.IN) -- Crit open at IN
+		local crit = PR.strikeDamage(commit(D.IN, D.IN, 0), offAxis)
 		local bestNormal = PR.strikeDamage(commit(D.IN, D.IN, 1), axis)
-		if punish <= bestNormal then
+		if crit <= bestNormal then
 			error(
-				"punish ("
-					.. tostring(punish)
+				"crit ("
+					.. tostring(crit)
 					.. ") must beat the best honest normal ("
 					.. tostring(bestNormal)
 					.. ") — CLAUDE.md invariant 1"
@@ -195,19 +206,19 @@ kit.describe("PassResolver — the CLAUDE.md invariants", function()
 		end
 	end)
 
-	kit.it("invariant 7: a punish must force a genuinely scary roll from full Balance", function()
-		-- One punish out of full Balance has to move the teeter meter meaningfully, or the matrix
+	kit.it("invariant 7: a crit must force a genuinely scary roll from full Balance", function()
+		-- One crit out of full Balance has to move the teeter meter meaningfully, or the matrix
 		-- stops mattering relative to the dice.
 		local res = PR.resolve(
-			commit(D.IN, D.IN, 1), -- attacker strikes into the hole
-			commit(D.UP, D.IN, 1), -- defender's hole is open at IN
+			commit(D.IN, D.IN, 1), -- attacker strikes into the Crit
+			commit(D.UP, D.IN, 1), -- defender's Crit is open at IN
 			state(Constants.BALANCE.START),
 			state(Constants.BALANCE.START),
 			fixedRng(0)
 		)
-		kit.expectEqual(res.b.tier, "punished")
+		kit.expectEqual(res.b.tier, "crit")
 		if res.b.stayChance == nil or res.b.stayChance > 0.8 then
-			error("a punish from full Balance must leave stay-on odds at or below 80%")
+			error("a crit from full Balance must leave stay-on odds at or below 80%")
 		end
 	end)
 
@@ -238,7 +249,7 @@ end)
 
 kit.describe("PassResolver — the teeter roll (GAME_SPEC §4)", function()
 	kit.it("a blocked rider takes no damage and never rolls", function()
-		-- Defender stacks IN (aim OUT, passive IN); attacker aims IN, straight into the deep guard.
+		-- Defender supershields IN (aim OUT, Shield IN); attacker aims IN, straight into it.
 		local res = PR.resolve(
 			commit(D.UP, D.IN, 1),
 			commit(D.IN, D.OUT, 1),
@@ -250,7 +261,7 @@ kit.describe("PassResolver — the teeter roll (GAME_SPEC §4)", function()
 		kit.expectEqual(res.b.damageTaken, 0, "damage")
 		kit.expectEqual(res.b.roll, nil, "no roll")
 		kit.expectEqual(res.b.unhorsed, false, "stays mounted")
-		kit.expectEqual(res.b.restore, Constants.MATRIX.STACK_BLOCK_RESTORE, "clean block restores")
+		kit.expectEqual(res.b.restore, Constants.MATRIX.SUPERSHIELD_RESTORE, "clean block restores")
 	end)
 
 	kit.it("stay-on odds track Balance: the roll lands under the odds or the rider goes down", function()

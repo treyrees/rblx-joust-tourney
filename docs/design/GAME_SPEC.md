@@ -1,8 +1,8 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001, 0002, 0003]
+decisions: [0001, 0002, 0003, 0004, 0005]
 owner: trey
-updated: 2026-07-29
+updated: 2026-07-30
 ---
 
 # JOUST — Founding Game Spec
@@ -33,7 +33,7 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
   1. Progression and matchmaking rise together — settled as **horse-tier rooms** (ADR 0002): the
      horse you bring is the room you are in, and the room sets the speed.
   2. An ante per match makes short rounds meaningful.
-  3. **Async ghosts are the population cheat code** — a ghost is just a guard choice + an aim trace;
+  3. **Async ghosts are the population cheat code** — a ghost is just a Shield choice + an aim trace;
      mechanically indistinguishable from a live opponent. **Ghost-first is plan-of-record** (Thing 0).
   4. The mind game comes from a wager/commit layer, not mechanical inputs.
   5. Best-of-N turns RPS into yomi (earlier passes teach habits).
@@ -47,23 +47,28 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
 **Directions:** four, self-relative — **in / out / up / down** (self-relative framing avoids the
 mirrored-pass left/right ambiguity) — plus **neutral**, a legitimate state and the default.
 
-**Phase 1 — Intermission (private commit):** pick your **passive guard** direction. Hidden until impact.
+**Phase 1 — Intermission (private commit):** pick your **Shield** direction. Hidden until impact.
 
 **Phase 2 — Run-up (one public input):** steer the **spear aim** on a circular touch wheel
 ("iPod wheel"), **quantized to the four sectors** with hard snapping (the televised state is always
 one of four clean values; the spear may animate smoothly between them, the *state* is discrete).
 Aim is fully televised to the opponent and spectators.
 
-- **Polarization (automatic):** your **active guard** is always opposite your aim. Aim out → guard in.
+- **Polarization (automatic):** your **Guard** is always opposite your aim. Aim out → Guard in.
   One input carries attack AND defense; you cannot aim at their weakness without configuring your own
   exposure. (For Honor's turtling failure is dodged because defense is never free or independent.)
+- **The Crit (automatic):** the direction opposite your Guard, which by polarization is *identically
+  your own aim direction*. It is where a strike lands at triple damage if your Shield is not there.
+  Aim and Crit are one direction named for opposite purposes — where you threaten, and where you are
+  exposed. "You are exposed exactly where you strike."
 - **Neutral is the opening state for everyone** — so the spawn frame leaks nothing, and *when you
   first leave neutral is itself a tell* (bet-timing; the run-up has poker streets for free).
 
 **The two bonuses (priced signaling):**
-- **Defensive bonus — binary:** awarded iff active guard (opposite of final aim) matches the passive
-  guard at the tick ("**stacking**"). Stack = one direction defended deeply; split = two directions
-  covered thinly with no bonus. **Depth-vs-breadth is a named strategic axis.**
+- **Defensive bonus — binary:** awarded iff the Guard (opposite of final aim) lands on the Shield at
+  the tick — a **Supershield**. Supershield = one direction defended deeply, with your Crit left bare;
+  any other placement covers two directions thinly and earns no bonus. **Depth-vs-breadth is a named
+  strategic axis** — and which pole is correct is still open (§12).
 - **Offensive bonus — prorated:** scales with the fraction of the run-up you held your *final* aim
   direction. The buildup meter is **public** — the crowd watches your commitment charge. A late
   switch is the bluff, and it has a mechanical price (reset buff = weaker strike), not just an
@@ -72,31 +77,31 @@ Aim is fully televised to the opponent and spectators.
   last-instant flick, which turns the bluffing spectrum into a binary. Linear keeps the meter
   readable as a dial and still costs the flicker 8 points of win rate.
 
-**Information architecture (three layers):** public offense meter + televised aim → inferable active
-guard → hidden passive guard (the hole card), revealed at impact. Every pass is a readable poker hand.
+**Information architecture (three layers):** public offense meter + televised aim → derived Guard and
+Crit → hidden Shield (the hole card), revealed at impact. Every pass is a readable poker hand.
 
 **Guardrails:**
 - **Aim locks a few tenths before the tick** — decision timing, never a ping war (UBG's ping meta is
   the cautionary tale).
-- **Beginners must be able to ignore every layer** — guard somewhere + aim somewhere is complete,
-  legal jousting. The signaling game is emergent depth, never required literacy. Protect this in tuning.
+- **Beginners must be able to ignore every layer** — Shield somewhere + aim somewhere is complete,
+  legal jousting (those two are the only inputs; Guard and Crit are derived for you). The signaling game is emergent depth, never required literacy. Protect this in tuning.
 
 **Neutral baseline (settled by ADR 0001):**
-1. Neutral aim at the tick → weak center strike, no punish potential, zero honesty buff
+1. Neutral aim at the tick → weak center strike, no crit potential, zero honesty buff
    (survivable, not viable). In the sim, neutral-camping ranks last of nine strategies.
-2. Neutral active guard → none (maximally soft; cageyness is priced by softness + proration tax).
-3. Neutral as a passive guard → legal, and it covers nothing. It cannot stack, so it forfeits the
+2. Neutral Guard → none (maximally soft; cageyness is priced by softness + proration tax).
+3. Neutral as a Shield → legal, and it covers nothing. It cannot supershield, so it forfeits the
    defensive bonus and leaves coverage at a single direction: a real option that is never a good one.
 
 ## 4. Resolution: the matrix, Balance, and the unhorse roll
 
 > Implemented and pinned: [pass/RESOLUTION.md](pass/RESOLUTION.md) is the deep doc, ADR 0001 the
-> decision. Punish keys off the **active** guard, so the rule reads *you are exposed exactly where you
-> strike*; a punish is 3x a normal.
+> decision. The crit keys off the **Guard**, not the hidden Shield, so the rule reads *you are exposed
+> exactly where you strike*; a crit is 3x a normal.
 
-**The matrix beat (deterministic — the gameable layer):** aim vs guard resolves to an outcome tier —
-**blocked / normal / punished** (punished = struck opposite your guard). Tiers translate to **Balance
-damage**, modified by lance stats, honesty bonus, cracked guards, and abilities. A clean block grants
+**The matrix beat (deterministic — the gameable layer):** aim vs Shield/Guard resolves to an outcome tier —
+**blocked / normal / crit** (crit = struck opposite your Guard). Tiers translate to **Balance
+damage**, modified by lance stats, honesty bonus, cracked Shields, and abilities. A clean block grants
 the defender a small Balance restore (blocking is a win, not a non-loss) — capped well below typical
 hit damage so convergence never stalls.
 
@@ -115,16 +120,16 @@ dice — and a correct read always beats a rarer horse.** Skill is the trump sui
 odds, never immunity to being outplayed. Everything downstream (matchmaking, monetization, meta
 content) hangs off this sentence.
 
-**Tuning guardrail:** the punished tier must usually force a genuinely scary roll — the matrix must
+**Tuning guardrail:** the crit tier must usually force a genuinely scary roll — the matrix must
 matter more than the dice on average, or the read game dies and it's only a slot machine.
 
 ## 5. Escalation & win condition
 
 - Balance attrition is the primary convergence engine (§4).
-- **Depleting guards (candidate, favored):** each direction's guard takes armor damage when struck;
-  repeatedly used guards crack, then break for the match. Forces conclusion mechanically AND
-  generates escalating information (a broken up-guard narrows your real options — later passes get
-  sharper reads exactly when the match needs to end). Imports UBG's "defense is a depleting
+- **Depleting coverage (candidate, favored):** each direction's coverage takes armor damage when
+  struck; repeatedly defended directions crack, then break for the match. Forces conclusion
+  mechanically AND generates escalating information (a broken up-side narrows your real options —
+  later passes get sharper reads exactly when the match needs to end). Imports UBG's "defense is a depleting
   resource, never a safe default."
 - Optional dramatic layers: rising per-pass wager (Snap-style raise/yield — diegetic as raising the
   lance / yielding before the charge), shortened aim window in sudden death.
@@ -141,7 +146,7 @@ matter more than the dice on average, or the read game dies and it's only a slot
   length scales with speed so run-up duration is identical everywhere** — the sub-15s cycle (§1) holds
   at every tier, and speed is a pure spectacle axis that never trades against the read game.
 - **Lance (horizontal, playstyle, native hotbar):** Balance damage profile + matrix personality
-  (heavy lance = harder normals; fine lance = doubled punish tier; etc.).
+  (heavy lance = harder normals; fine lance = doubled crit tier; etc.).
 - **Ability (active, one-shot per match):** manipulates one number or one roll — reroll, guaranteed
   stay-on, "next honest hit crits," a peek, a fake tell. Nature derived from what the matrix needs
   in playtesting, not decided in advance. Lives in the neutral state and/or UI space (§7).
@@ -168,7 +173,7 @@ legible while archetypes stay arguable (tier-list fuel).
 Tilt-yard lobby where **waiting is spectating** (the UBG masterstroke): visible queue, rail crowd
 watching live passes — both public aims and offense meters visible, guards revealed at impact; every
 pass is legible to the rail. Instant requeue; loss costs an ante, never a session. **Post-pass
-reveal** ("you leaned HIGH, they braced LOW — counter!") turns every loss into a lesson and every
+reveal** ("you leaned HIGH, they shielded LOW — counter!") turns every loss into a lesson and every
 clip into content. Player-facing matchup data (per-matchup win rates, pass history, commit-sequence
 replays — cheap, a match is a short decision list).
 
@@ -211,12 +216,23 @@ elimination stakes, the craft web as the front door.
 
 ## 12. Open questions (the honest list)
 
-- ~~Proration curve shape~~ / ~~neutral as a passive-guard option~~ / ~~neutral baseline numbers~~ —
+- ~~Proration curve shape~~ / ~~neutral as a Shield option~~ / ~~neutral baseline numbers~~ —
   settled by ADR 0001. What replaces them: the hold-fraction *distribution* real players produce. The
   sim's riders hold fixed fractions, so it cannot speak to this, and it is the most likely reason to
   reopen the curve.
-- Depleting guards: confirm as the escalation mechanism; tune crack/break thresholds. These change
+- Depleting coverage: confirm as the escalation mechanism; tune crack/break thresholds. These change
   the coverage rule, so they need their own ADR and their own sim run.
+- **The Supershield's magnitudes** — ADR 0005 settles that the Supershield pays offense as well as
+  defense (flat, additive with proration), because on ADR 0001's numbers the *axis* shape outranks it
+  by 7.5 points of win rate and even beats the `oracle`. It deliberately pins **no number**. Three are
+  open and all three are `combat-axis`: `THIN_BLOCK_MULT`, `SUPERSHIELD_RESTORE`, and the size of the
+  Supershield's strike bonus. Two things the sim must catch when they land: whether convergence stays
+  in the 3–5 pass band, and the mutual-Supershield-on-opposite-directions case, where both riders
+  clean block, both take the restore, nobody rolls, and Balance goes *up* for both.
+- **The aim distribution real players produce** — the Supershield's whole liability is a bare Crit, so
+  its value moves with how often opponents actually aim there. The sim's riders use fixed aim
+  policies, so it cannot answer this; it is the same blind spot as the hold-fraction distribution
+  above, and it is what will reopen ADR 0005's numbers.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
   Monetization structure is settled (ADR 0003, [chase/MONETIZATION.md](chase/MONETIZATION.md));
@@ -247,7 +263,7 @@ elimination stakes, the craft web as the front door.
 
 ## 13. Milestone 1: the gray-box pass (and nothing else)
 
-One pass, two riders, no art, no economy: wheel input with sector snapping, passive-guard commit,
+One pass, two riders, no art, no economy: wheel input with sector snapping, Shield commit,
 polarization, both bonuses, the matrix, Balance + the teeter roll, post-pass reveal. Scripted rider
 personalities stand in for opponents. **Success criteria:** (a) testers voluntarily say "one more";
 (b) testers start bluffing unprompted within ~10 matches. Every downstream decision — the chase, the
