@@ -279,6 +279,11 @@ type Tally = {
 	unhorses: number,
 	totalUnhorseBalance: number,
 	longShotFalls: number,
+	-- Where on the meter riders actually go down. "Bring the number to zero" is the natural way to
+	-- describe a health bar, and it is not what this meter does: a rider rolls against Balance every
+	-- time they are hit, so most matches end long before the bar empties. This histogram is how much
+	-- of the bar is real.
+	fallBuckets: { number },
 }
 
 local LONG_SHOT_ODDS = 0.8 -- a fall at ≥80% stay-on odds is the dice overruling the meter
@@ -292,12 +297,15 @@ local function newTally(): Tally
 		unhorses = 0,
 		totalUnhorseBalance = 0,
 		longShotFalls = 0,
+		fallBuckets = table.create(10, 0),
 	}
 end
 
 local function recordFall(tally: Tally, out: any)
 	tally.unhorses += 1
 	tally.totalUnhorseBalance += out.balanceAfter
+	local b = math.clamp(math.floor(out.balanceAfter / 10) + 1, 1, 10)
+	tally.fallBuckets[b] += 1
 	if (out.stayChance or 0) >= LONG_SHOT_ODDS then
 		tally.longShotFalls += 1
 	end
@@ -426,6 +434,13 @@ local meanFallBalance = tally.totalUnhorseBalance / tally.unhorses
 local longShotRate = tally.longShotFalls / tally.unhorses
 print(string.format("convergence: %.2f passes per match on average (%d matches, %d hit the %d-pass cap)",
 	meanPasses, tally.passes, tally.timeouts, MAX_PASSES))
+print("where riders actually go down (Balance at the moment of the fall)")
+for b = 10, 1, -1 do
+	local share = tally.fallBuckets[b] / tally.unhorses
+	print(string.format("  %3d-%3d  %5.1f%%  %s", (b - 1) * 10, b * 10 - 1, 100 * share,
+		string.rep("#", math.floor(share * 120))))
+end
+print("")
 print(string.format("attrition: riders fall at %.1f Balance on average; %.1f%% of falls came off a roll they were "
 	.. "%.0f%%+ favoured to make", meanFallBalance, 100 * longShotRate, 100 * LONG_SHOT_ODDS))
 print("")
