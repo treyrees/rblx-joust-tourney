@@ -24,7 +24,9 @@ local Constants = roblox.requireShared("Constants")
 local PR = roblox.requireShared("PassResolver")
 
 local D = Constants.DIRECTIONS
-local FOUR = { D.IN, D.OUT, D.UP, D.DOWN }
+-- The playable directions, filled in after the arguments are read because --notches can replace the
+-- cycle. Four is what ships (invariant 4); a larger cycle exists only so the instrument can price it.
+local FOUR: { string } = {}
 local MAX_PASSES = 30 -- a match this long is a convergence failure, and is reported as one
 
 -- ---- args --------------------------------------------------------------------------------------
@@ -42,6 +44,23 @@ do
 			i += 2
 		elseif a == "--curve" then
 			Constants.PRORATION.CURVE = args[i + 1]
+			i += 2
+		elseif a == "--notches" then
+			local n = tonumber(args[i + 1]) or 4
+			if n ~= 4 then
+				local cycle = {}
+				for k = 1, n do
+					cycle[k] = "n" .. tostring(k - 1)
+				end
+				Constants.CYCLE = cycle
+				Constants.RING = {}
+				for k = 0, n - 1 do
+					Constants.RING[k] = "normal"
+				end
+			end
+			i += 2
+		elseif a == "--shield-band" then
+			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
 			i += 2
 		elseif a == "--ring" then
 			-- Four letters, one per quarter-turn offset from the defender's own aim: C=crit G=guard
@@ -61,6 +80,11 @@ do
 			i += 1
 		end
 	end
+end
+
+-- The cycle is settled now, so the playable direction list can be built.
+for _, dir in Constants.CYCLE do
+	table.insert(FOUR, dir)
 end
 
 -- ---- deterministic RNG -------------------------------------------------------------------------
@@ -317,7 +341,19 @@ local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 end
 
 -- ---- run ---------------------------------------------------------------------------------------
-print(string.format("sim — %d matches per pairing, seed %d, curve %s", matches, seed, Constants.PRORATION.CURVE))
+local ringCode = ""
+for i = 0, #Constants.CYCLE - 1 do
+	ringCode ..= ({ crit = "C", guard = "G", normal = "N" })[Constants.RING[i]]
+end
+print(string.format(
+	"sim — %d matches per pairing, seed %d, curve %s, ring %s (%d notches), shield band %d",
+	matches,
+	seed,
+	Constants.PRORATION.CURVE,
+	ringCode,
+	#Constants.CYCLE,
+	Constants.SHIELD_BAND
+))
 print(string.format(
 	"matrix: normal %.1f  crit %.1f  weak %.1f  thin-block x%.2f  restore %.1f  max-bonus %.2f",
 	Constants.MATRIX.NORMAL_DAMAGE,
