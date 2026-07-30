@@ -30,7 +30,8 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 
 -- ---- args --------------------------------------------------------------------------------------
 local topN, showAll, onlyRing = 12, false, nil :: string?
-local notches, anchored = 4, false
+local notches, anchored, contiguous = 4, false, false
+local sortKey = "read"
 do
 	local args = process.args
 	local i = 1
@@ -50,6 +51,12 @@ do
 		elseif args[i] == "--shield-band" then
 			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
 			i += 2
+		elseif args[i] == "--sort" then
+			sortKey = args[i + 1] or "read"
+			i += 2
+		elseif args[i] == "--contiguous" then
+			contiguous = true
+			i += 1
 		elseif args[i] == "--anchored" then
 			-- Let each rider also choose WHICH of their ring's crit notches their aim occupies: the
 			-- same threat with the exposure laid out differently around it.
@@ -159,8 +166,47 @@ if notches == 4 then
 			end
 		end
 	end
+elseif contiguous then
+	-- The design-relevant slice of a larger ring space: one contiguous crit wedge, one contiguous
+	-- guard wedge, everything else normal — rings that look like something you can paint on a shield.
+	-- The crit wedge is required to contain offset 0, which is the rule "you are exposed exactly
+	-- where you strike" stated as a constraint on the search rather than assumed in the code.
+	local seen: { [string]: boolean } = {}
+	for critLen = 1, notches - 2 do
+		for critStartOff = 0, critLen - 1 do
+			local critStart = (notches - critStartOff) % notches
+			local isCrit: { [number]: boolean } = {}
+			for k = 0, critLen - 1 do
+				isCrit[(critStart + k) % notches] = true
+			end
+			for guardLen = 1, notches - critLen do
+				for guardStart = 0, notches - 1 do
+					local ok = true
+					for k = 0, guardLen - 1 do
+						if isCrit[(guardStart + k) % notches] then
+							ok = false
+						end
+					end
+					if ok then
+						local r = {}
+						for i = 0, notches - 1 do
+							r[i] = if isCrit[i] then "crit" else "normal"
+						end
+						for k = 0, guardLen - 1 do
+							r[(guardStart + k) % notches] = "guard"
+						end
+						local code = ringCode(r)
+						if not seen[code] and not seen[mirrorCode(code)] then
+							seen[code] = true
+							table.insert(RINGS, r)
+						end
+					end
+				end
+			end
+		end
+	end
 elseif not onlyRing then
-	error(string.format("--notches %d needs an explicit --ring CODE (%d letters)", notches, notches))
+	error(string.format("--notches %d needs an explicit --ring CODE, or --contiguous", notches))
 end
 
 -- ---- payoff ------------------------------------------------------------------------------------
@@ -179,7 +225,8 @@ end
 -- Fictitious play on a symmetric zero-sum game. Each step best-responds to the opponent's empirical
 -- mix, then folds that response into the mix. The running payoff vector makes a step O(N) rather
 -- than O(N^2), which is what keeps a 45-ring sweep instant.
-local ITERS = 40000
+-- A sweep trades solver precision for breadth; a single named ring gets the precise treatment.
+local ITERS = if onlyRing then 200000 else 20000
 
 local function solve(M: { { number } }): { number }
 	local acc = table.create(N, 0)
@@ -296,11 +343,24 @@ local function analyse(r: { [number]: string }): Report
 
 	-- Value of the televised half only: the opponent's Aim is public, their Shield is not. This is
 	-- the read a real player actually gets to make during the run-up.
+	-- The public half is the aim AND the anchor: the ring is painted on the shield, so however it is
+	-- rotated is plainly visible. Treating the anchor as hidden would credit the hole card with
+	-- information the opponent can simply look at.
+	local publicKeys: { string } = {}
+	local seenKey: { [string]: boolean } = {}
+	for j = 1, N do
+		local k = STRATS[j].aim .. "|" .. tostring(STRATS[j].anchor)
+		if not seenKey[k] then
+			seenKey[k] = true
+			table.insert(publicKeys, k)
+		end
+	end
+
 	local aimEdge = 0
-	for _, aim in ALL_DIRS do
+	for _, key in publicKeys do
 		local mass = 0
 		for j = 1, N do
-			if STRATS[j].aim == aim then
+			if STRATS[j].aim .. "|" .. tostring(STRATS[j].anchor) == key then
 				mass += p[j]
 			end
 		end
@@ -309,7 +369,7 @@ local function analyse(r: { [number]: string }): Report
 			for i = 1, N do
 				local v = 0
 				for j = 1, N do
-					if STRATS[j].aim == aim then
+					if STRATS[j].aim .. "|" .. tostring(STRATS[j].anchor) == key then
 						v += (p[j] / mass) * M[i][j]
 					end
 				end
@@ -374,6 +434,7 @@ local function analyse(r: { [number]: string }): Report
 end
 
 -- ---- run ---------------------------------------------------------------------------------------
+buildStrats({})
 print(string.format(
 	"ring sweep — %d distinct rings (mirror images folded), %d commitments each, %d FP iterations",
 	#RINGS,
@@ -402,10 +463,16 @@ end
 
 -- A ring is only interesting if the equilibrium is genuinely mixed. One pure line at ~100% weight is
 -- a solved game; sort those to the bottom regardless of how good their other numbers look.
+local function rank(r: Report): number
+	-- A ring where one pure line carries the equilibrium is a solved game whatever else it scores.
+	if r.maxWeight > 0.9 then
+		return -1
+	end
+	return if sortKey == "hole" then r.fullEdge - r.aimEdge else r.fullEdge
+end
+
 table.sort(reports, function(x, y)
-	local xs = if x.maxWeight > 0.9 then -1 else x.fullEdge
-	local ys = if y.maxWeight > 0.9 then -1 else y.fullEdge
-	return xs > ys
+	return rank(x) > rank(y)
 end)
 
 print("ring   chiral  top-wt  supp  read-edge  aim-edge  hole-card   crit%  mutual-crit%  block%  exploit")
