@@ -34,6 +34,8 @@ local notches, anchored, contiguous = 4, false, false
 local guardOpposite = false
 local dumpMix = false
 local sortKey = "read"
+local balA, balB = 100, 100
+local survivalPayoff = false
 do
 	local args = process.args
 	local i = 1
@@ -56,6 +58,15 @@ do
 		elseif args[i] == "--sort" then
 			sortKey = args[i + 1] or "read"
 			i += 2
+		elseif args[i] == "--balance" then
+			-- Solve at a given Balance state instead of full health. The Supershield's whole promise is
+			-- that its value RISES as a rider falls, and a Balance-differential payoff is linear and so
+			-- cannot see that. This switches the payoff to unhorse-probability differential, which is
+			-- what actually matters near death.
+			balA = tonumber(args[i + 1]) or 100
+			balB = tonumber(args[i + 2]) or balA
+			survivalPayoff = true
+			i += 3
 		elseif args[i] == "--ss-restore" then
 			Constants.MATRIX.SUPERSHIELD_RESTORE = tonumber(args[i + 1]) or 2
 			i += 2
@@ -241,7 +252,20 @@ local function payoff(a: Strat, b: Strat): (number, string, string)
 	local dmgToA, tierA = PR.strikeDamage(b, a)
 	local restA = if tierA == "blocked" and PR.isSupershielded(a) then Constants.MATRIX.SUPERSHIELD_RESTORE else 0
 	local restB = if tierB == "blocked" and PR.isSupershielded(b) then Constants.MATRIX.SUPERSHIELD_RESTORE else 0
-	return (dmgToB - restB) - (dmgToA - restA), tierA, tierB
+	if not survivalPayoff then
+		return (dmgToB - restB) - (dmgToA - restA), tierA, tierB
+	end
+	-- Survival mode: what a pass is worth is the chance it puts the other rider in the dirt, minus the
+	-- chance it puts you there. Only a rider who took damage rolls at all (GAME_SPEC §4), so a restore
+	-- is worth nothing at full Balance and a great deal at twenty.
+	local function fallChance(bal: number, dmg: number, rest: number): number
+		if dmg <= 0 then
+			return 0
+		end
+		local after = math.clamp(bal - dmg + rest, Constants.BALANCE.MIN, Constants.BALANCE.MAX)
+		return 1 - math.clamp(after / Constants.BALANCE.MAX, 0, 1)
+	end
+	return fallChance(balB, dmgToB, restB) - fallChance(balA, dmgToA, restA), tierA, tierB
 end
 
 -- ---- the solver --------------------------------------------------------------------------------
@@ -254,6 +278,10 @@ local ITERS = if onlyRing then 200000 else 20000
 local function solve(M: { { number } }): { number }
 	local acc = table.create(N, 0)
 	local counts = table.create(N, 0)
+	-- The column player needs its own population once the two riders sit at different Balance: the
+	-- game is still zero sum, but no longer symmetric, so a single mix cannot stand in for both.
+	local accCol = table.create(N, 0)
+	local colBest = 1
 	for _ = 1, ITERS do
 		local best, bestV = 1, -math.huge
 		for i = 1, N do
@@ -261,12 +289,26 @@ local function solve(M: { { number } }): { number }
 				best, bestV = i, acc[i]
 			end
 		end
+		if balA ~= balB then
+			local cb, cv = 1, -math.huge
+			for j = 1, N do
+				if accCol[j] > cv then
+					cb, cv = j, accCol[j]
+				end
+			end
+			colBest = cb
+			for j = 1, N do
+				accCol[j] -= M[best][j]
+			end
+		else
+			colBest = best
+		end
 		counts[best] += 1
 		-- acc[i] must accumulate i's payoff AGAINST the response just played, i.e. the `best` COLUMN.
 		-- Reading the `best` row instead silently solves the negated game, since the payoff matrix is
 		-- antisymmetric.
 		for i = 1, N do
-			acc[i] += M[i][best]
+			acc[i] += M[i][colBest]
 		end
 	end
 	local p = table.create(N, 0)
