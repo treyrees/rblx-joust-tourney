@@ -68,7 +68,14 @@ do
 			-- rather than only solved in one shot.
 			local FROM = { C = "crit", G = "guard", N = "normal" }
 			local code = args[i + 1]
-			for k = 0, 3 do
+			-- One letter per notch. Bounded by the code's own length, not by four: hardcoding four
+			-- here silently truncated every larger ring and left its tail as "normal".
+			if #code ~= #Constants.CYCLE then
+				error(string.format(
+					"--ring %q has %d letters but the cycle has %d notches (pass --notches first)",
+					code, #code, #Constants.CYCLE))
+			end
+			for k = 0, #code - 1 do
 				local cls = FROM[code:sub(k + 1, k + 1):upper()]
 				if not cls then
 					error("bad --ring code: " .. tostring(code))

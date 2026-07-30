@@ -31,6 +31,7 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 -- ---- args --------------------------------------------------------------------------------------
 local topN, showAll, onlyRing = 12, false, nil :: string?
 local notches, anchored, contiguous = 4, false, false
+local guardOpposite = false
 local sortKey = "read"
 do
 	local args = process.args
@@ -54,6 +55,11 @@ do
 		elseif args[i] == "--sort" then
 			sortKey = args[i + 1] or "read"
 			i += 2
+		elseif args[i] == "--guard-opposite" then
+			-- Readability constraint: the Guard must sit directly across from the attack notch, which
+			-- is what makes polarization intuitive ("you defend away from where you strike").
+			guardOpposite = true
+			i += 1
 		elseif args[i] == "--contiguous" then
 			contiguous = true
 			i += 1
@@ -196,7 +202,8 @@ elseif contiguous then
 							r[(guardStart + k) % notches] = "guard"
 						end
 						local code = ringCode(r)
-						if not seen[code] and not seen[mirrorCode(code)] then
+						local keep = not guardOpposite or r[notches // 2] == "guard"
+						if keep and not seen[code] and not seen[mirrorCode(code)] then
 							seen[code] = true
 							table.insert(RINGS, r)
 						end
