@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau]
-decisions: [0002]
+decisions: [0003]
 owner: trey
 updated: 2026-07-29
 ---
@@ -9,7 +9,7 @@ updated: 2026-07-29
 
 > The deep monetization plan for Joust, produced from a three-lane comp survey (2026-07-29): the
 > platform-standard progression meta, Untitled Boxing Game specifically, and the wider duel/collection
-> comp set. Structural decision recorded in [ADR 0002](../decisions/0002-monetization-standard-meta.md).
+> comp set. Structural decision recorded in [ADR 0003](../decisions/0003-monetization-standard-meta.md).
 > Nothing here ships in M1 (GAME_SPEC §13); this doc exists so the chase (§9) and the D1 economy get
 > designed against a settled commercial skeleton instead of the other way round.
 
@@ -190,10 +190,13 @@ Two structural facts make cosmetics unusually valuable in Joust, and the comps p
 
 ### 4.3 The ante economy: 8 Ball Pool's sink, with the pipes kept separate
 
-GAME_SPEC §8 already commits to "loss costs an ante, never a session," and §2 to stakes rooms as a
-matchmaking candidate. 8 Ball Pool is the canonical proof: entry-fee rooms laddered from trivial to
-aspirational, winner takes the pot minus rake, make the wager currency self-renewingly scarce and
-every match feel like poker — a perfect thematic fit for a game whose core layer *is* a poker hand.
+GAME_SPEC §8 already commits to "loss costs an ante, never a session," and matchmaking is settled
+as **horse-tier rooms** (ADR 0002): the horse you bring is the room you are in. 8 Ball Pool is the
+canonical proof for the ante itself: entry-fee rooms laddered from trivial to aspirational, winner
+takes the pot minus rake, make the wager currency self-renewingly scarce and every match feel like
+poker — a perfect thematic fit for a game whose core layer *is* a poker hand. Here the ante ladder
+maps onto the horse-tier brackets: higher brackets carry higher stakes, so the bracket climb (the
+chase) and the stakes climb (the sink) are the same aspiration.
 
 The comp's failure mode is equally clear (8BP cues, Golf Clash clubs): the ante economy metastasizes
 into pay-to-win when the same currency feeds both stakes and power. Our pipe-separation rule:
@@ -202,8 +205,8 @@ roll, or information.** Loss-streak top-up pressure (buying gold at the moment o
 is accepted — that's buying more attempts at the slot machine and the poker table, which is the
 platform-standard sale — but the table itself is never tilted.
 
-Stakes rooms double as matchmaking stratification (the §12 "trophy gating vs stakes rooms" open
-question gains a monetization argument for stakes rooms: they create the endless sink for free).
+Horse-tier rooms already stratify matchmaking (ADR 0002); scaling antes by bracket gets the
+8 Ball Pool sink for free without adding a second room system.
 
 ### 4.4 Horse attachment: the Star Stable hedge and the breeding sink
 
@@ -275,8 +278,8 @@ net roughly 25–30¢ per player dollar, so the model is volume-and-conversion, 
 
 ## 8. Open questions (feed §12 of the spec)
 
-- Stakes rooms vs trophy gating (§12): this doc adds a monetization argument for stakes rooms
-  (§4.3). Decide once, with an ADR.
+- Ante ladder sizing per horse-tier bracket (§4.3): matchmaking is settled (ADR 0002, horse-tier
+  rooms); the per-bracket ante values and rake are economy-session numbers.
 - The rarity→stat curve and the read-edge floor under it: needs its own `combat-axis: true` ADR with
   a sim run before any egg ships (§4.1).
 - Egg pricing/pull-rate numbers, gold faucet sizing, ante ladder values: undesigned; they depend on

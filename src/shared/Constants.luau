@@ -10,7 +10,18 @@ Constants.PASS = {
 	RUNUP_SECONDS = 6,
 	RESOLUTION_SECONDS = 1.5,
 	AIM_LOCK_BEFORE_TICK = 0.3, -- aim freezes this long before the tick — decision timing, never a ping war
+	-- The ping guard above is absolute (latency is measured in seconds), so as the run-up shortens
+	-- the lock eats a larger share of the window a player actually gets to decide in. This ceiling is
+	-- what stops that: the lock may never exceed this fraction of the run-up. It is the reason a
+	-- bracket cannot be made arbitrarily fast (ADR 0002) — the floor on run-up duration falls out of
+	-- it as AIM_LOCK_BEFORE_TICK / AIM_LOCK_MAX_RUNUP_FRACTION, currently 3 seconds.
+	AIM_LOCK_MAX_RUNUP_FRACTION = 0.1,
 }
+
+-- The shortest run-up any bracket may use, derived rather than declared: below this the ping guard
+-- would swallow the decision window and the pass would stop being a decision (ADR 0002). Speed tiers
+-- may make the joust look faster than this implies, but not think faster.
+Constants.PASS.MIN_RUNUP_SECONDS = Constants.PASS.AIM_LOCK_BEFORE_TICK / Constants.PASS.AIM_LOCK_MAX_RUNUP_FRACTION
 
 -- The four directions plus neutral (GAME_SPEC §3). Self-relative framing — in/out/up/down — so the
 -- mirrored pass carries no left/right ambiguity. Neutral is a legitimate state and the default.

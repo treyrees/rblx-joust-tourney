@@ -25,4 +25,35 @@ kit.describe("Constants — the pass cycle", function()
 			error("aim lock longer than the whole run-up")
 		end
 	end)
+
+	-- ADR 0002: brackets get faster as horses get rarer, but the ping guard is absolute, so a short
+	-- enough run-up would let the lock swallow the decision window. These two tests are what stop a
+	-- future speed tier from being tuned into an execution game by editing a duration.
+	kit.it("the ping guard never eats more than its share of the run-up", function()
+		local P = Constants.PASS
+		local share = P.AIM_LOCK_BEFORE_TICK / P.RUNUP_SECONDS
+		if share > P.AIM_LOCK_MAX_RUNUP_FRACTION then
+			error(
+				string.format(
+					"aim lock is %.1f%% of the run-up, ceiling is %.1f%% (ADR 0002)",
+					100 * share,
+					100 * P.AIM_LOCK_MAX_RUNUP_FRACTION
+				)
+			)
+		end
+	end)
+
+	kit.it("the run-up floor is derived from the ping guard, and the run-up respects it", function()
+		local P = Constants.PASS
+		kit.expectNear(P.MIN_RUNUP_SECONDS, P.AIM_LOCK_BEFORE_TICK / P.AIM_LOCK_MAX_RUNUP_FRACTION, 1e-9)
+		if P.RUNUP_SECONDS < P.MIN_RUNUP_SECONDS then
+			error(
+				string.format(
+					"run-up %.2fs is below the %.2fs floor the ping guard implies (ADR 0002)",
+					P.RUNUP_SECONDS,
+					P.MIN_RUNUP_SECONDS
+				)
+			)
+		end
+	end)
 end)

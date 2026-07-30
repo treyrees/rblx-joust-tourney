@@ -1,0 +1,64 @@
+name: gates
+
+# The two gates from docs/design/WORKFLOW.md, plus the pass simulator, run on every PR and every
+# push to main. Until this existed they only ran via .claude/hooks/session-start.sh, which meant a
+# change that never had a session attached to it was never verified at all.
+#
+# Lune is the only dependency. It is installed from a pinned prebuilt release rather than
+# `cargo install`, which compiles from source and takes minutes; the download takes seconds.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes an in-flight run obsolete.
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    env:
+      LUNE_VERSION: "0.10.5"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # design-lint computes doc staleness from git history (`git log`, and `git log -L` for
+          # `path#Key` anchors). A shallow clone would leave it reading truncated history, so it
+          # needs the full log to tell drift from a doc that was simply never touched.
+          fetch-depth: 0
+
+      - name: Install Lune
+        run: |
+          set -euo pipefail
+          url="https://github.com/lune-org/lune/releases/download/v${LUNE_VERSION}/lune-${LUNE_VERSION}-linux-x86_64.zip"
+          curl -fsSL -o /tmp/lune.zip "$url"
+          unzip -q /tmp/lune.zip -d /tmp/lune
+          chmod +x /tmp/lune/lune
+          echo /tmp/lune >> "$GITHUB_PATH"
+
+      - name: Lune version
+        run: lune --version
+
+      # Gate one: the code is correct.
+      - name: Unit tests
+        run: lune run tests/run.luau
+
+      # Gate two: docs, code and ADRs are consistent. Exits 1 on a structural problem (a dead
+      # maps-to path, a broken link, a missing or superseded ADR, a combat-axis ADR with no cited
+      # sim run); drift is a warning and does not fail the build.
+      - name: Design lint
+        run: lune run tools/design-lint.luau
+
+      # Not a third gate so much as the first one applied to the tuning numbers: the simulator
+      # exits non-zero if convergence leaves GAME_SPEC §4's 3-5 pass band, if reading stops beating
+      # random by a wide margin, if most falls start coming off near-certain rolls, or if
+      # neutral-camping climbs the table. Deterministic (fixed seed, LCG) and ~12s at full scale,
+      # so it runs at the same settings an ADR would cite rather than a reduced sample.
+      - name: Pass simulator
+        run: lune run tools/sim.luau

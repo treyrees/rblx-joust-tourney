@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001, 0002]
+decisions: [0001, 0002, 0003]
 owner: trey
 updated: 2026-07-29
 ---
@@ -30,7 +30,8 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
   collection chase UBG lacks. Gameplay is *simpler* than the comp; depth lives in reads and wagers.
 - **Format playbook** (Clash Royale, 8 Ball Pool, Super Auto Pets, Marvel Snap, FOOTSIES/Divekick,
   YOMI Hustle, For Honor as the directional-guard cautionary tale):
-  1. Progression and matchmaking rise together (trophy gating or stakes rooms — decide once).
+  1. Progression and matchmaking rise together — settled as **horse-tier rooms** (ADR 0002): the
+     horse you bring is the room you are in, and the room sets the speed.
   2. An ante per match makes short rounds meaningful.
   3. **Async ghosts are the population cheat code** — a ghost is just a guard choice + an aim trace;
      mechanically indistinguishable from a live opponent. **Ghost-first is plan-of-record** (Thing 0).
@@ -132,6 +133,13 @@ matter more than the dice on average, or the read game dies and it's only a slot
 
 - **Horse (vertical, rarity, the chase):** max Balance, damage soak, and **recovery** (bonus to the
   teeter roll — the rarest horses are the *clutch* horses; better fantasy than damage sponge).
+- **Horse speed (the odd one out — an *access* stat, not an in-match stat):** speed is set by the
+  **bracket**, not by the rider, and rarity determines which brackets a horse may enter (ADR 0002).
+  There is one run-up and one tick, so there can only be one speed in a match; a per-rider speed would
+  shrink the opponent's decision window, which is rarity beating a read. Rarity buys admission to a
+  faster, louder tier — never an edge inside it. **Each bracket is its own physical lane, and lane
+  length scales with speed so run-up duration is identical everywhere** — the sub-15s cycle (§1) holds
+  at every tier, and speed is a pure spectacle axis that never trades against the read game.
 - **Lance (horizontal, playstyle, native hotbar):** Balance damage profile + matrix personality
   (heavy lance = harder normals; fine lance = doubled punish tier; etc.).
 - **Ability (active, one-shot per match):** manipulates one number or one roll — reroll, guaranteed
@@ -171,7 +179,7 @@ the horizontal playstyle spread (equip via native hotbar). v1 can be embarrassin
 of horses × 3 rarities, 3–4 lances with distinct matrix-tilts. The acquisition loop (currency faucet,
 gacha/eggs/breeding, any idle/stable-tending layer) is **undesigned** — it is the D1 half of the game
 and needs its own design session (see §12) — though its commercial skeleton is now settled by
-[chase/MONETIZATION.md](chase/MONETIZATION.md) (ADR 0002). Launch with a deliberately debatable tier list: games
+[chase/MONETIZATION.md](chase/MONETIZATION.md) (ADR 0003). Launch with a deliberately debatable tier list: games
 that ship with an arguable meta get their first content wave made for them.
 
 ## 10. Scope doctrine: three things (plus Thing 0)
@@ -211,11 +219,15 @@ elimination stakes, the craft web as the front door.
   the coverage rule, so they need their own ADR and their own sim run.
 - Wager layer (raise/yield): in v1 or update two?
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
-  Monetization structure is settled (ADR 0002, [chase/MONETIZATION.md](chase/MONETIZATION.md));
-  still open inside it: faucet sizing, egg odds, ante ladders, and the rarity→stat curve (the
-  latter needs its own combat-axis ADR + sim run before any egg ships).
-- Matchmaking: trophy gating vs stakes rooms (decide once, per §2.1 — stakes rooms now also carry a
-  monetization argument, MONETIZATION.md §4.3).
+  Monetization structure is settled (ADR 0003, [chase/MONETIZATION.md](chase/MONETIZATION.md));
+  still open inside it: faucet sizing, egg odds, ante ladders (now mapped per horse-tier bracket,
+  per ADR 0002), and the rarity→stat curve (the latter needs its own combat-axis ADR + sim run
+  before any egg ships).
+- ~~Matchmaking: trophy gating vs stakes rooms~~ — settled by ADR 0002 with a third option neither
+  listed: **horse-tier rooms**. The horse you bring is the room you are in. What replaces it: the
+  speed-to-run-up-duration mapping per bracket, which `tools/sim.luau` cannot answer (it resolves
+  commitments; the open question is how long a *human* needs to make one) and which needs a playtest
+  instrument that does not exist yet.
 - Match wrapper: is a "match" one duel to unhorse, or best-of-duels? Session rhythm target.
 - The charge's kinesthetic/presentation layer (camera, sound ramp, crowd) — designed only by feel,
   in-engine.
@@ -223,7 +235,15 @@ elimination stakes, the craft web as the front door.
   noise → the game degrades to matrix-EV + slot machine at the median. Acceptable if reads emerge in
   ranked/older cohorts — the Pokémon shape — but verify: do playtesters start bluffing unprompted
   within ~10 matches?)
-- Name / thumbnail / title-hook (platform-meta phrasing).
+- Name / thumbnail / title-hook (platform-meta phrasing). **Working title: Turbo Jousting**
+  (tentative). It reads well on platform — two words, a familiar intensifier plus the fantasy named
+  outright, searchable and thumbnail-able — and since ADR 0002 it has mechanical backing rather than
+  being packaging: bracket lanes make speed a real escalating axis, so the top bracket genuinely *is*
+  the turbo one. **The caution that comes with it:** §2 positions this game as the comp's loop with
+  the twitch *removed*, and "Turbo" promises speed that a chunk of players will read as *reflexes*.
+  Store copy and thumbnails must lean "fast and dramatic", never "fast reflexes" — get that wrong and
+  we recruit exactly the players most likely to bounce off a commit-based game, and the resulting D1
+  numbers will look like a retention problem when they are a marketing-promise problem.
 
 ## 13. Milestone 1: the gray-box pass (and nothing else)
 

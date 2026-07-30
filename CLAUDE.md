@@ -1,4 +1,4 @@
-# CLAUDE.md — Joust (working title)
+# CLAUDE.md — Turbo Jousting (working title)
 
 Roblox game: a recurring gauntlet of fast 1v1 jousts. One committed mind-game decision per pass,
 resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees/rblx-auto-br`).
@@ -33,7 +33,8 @@ lune run tools/design-lint.luau  # design-doc drift / link / ADR checker
 lune run tools/sim.luau          # the pass simulator — the instrument combat-axis ADRs must cite
 ```
 
-Both gates run automatically at session start via `.claude/hooks/session-start.sh` (remote sessions).
+All three run in CI on every PR and push to `main` (`.github/workflows/gates.yml`), and again at
+session start via `.claude/hooks/session-start.sh` (remote sessions). CI is the one that gates.
 Rojo maps `src/{server,client,gui,shared}` → ServerScriptService / StarterPlayerScripts / StarterGui /
 ReplicatedStorage.Shared.
 

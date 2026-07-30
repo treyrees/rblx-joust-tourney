@@ -1,5 +1,5 @@
 ---
-id: 0002
+id: 0003
 title: Monetization adopts the platform-standard meta, arranged around the read invariant
 date: 2026-07-29
 status: accepted
@@ -8,7 +8,7 @@ superseded-by: null
 combat-axis: false
 ---
 
-# 0002 — Monetization adopts the platform-standard meta, arranged around the read invariant
+# 0003 — Monetization adopts the platform-standard meta, arranged around the read invariant
 
 ## Context
 
