@@ -59,6 +59,15 @@ do
 				end
 			end
 			i += 2
+		elseif a == "--breaking" then
+			Constants.BREAK.ENABLED = true
+			i += 1
+		elseif a == "--swap" then
+			Constants.BREAK.TRIGGER = "proration"
+			i += 1
+		elseif a == "--break-momentum" then
+			Constants.BREAK.MOMENTUM_THRESHOLD = tonumber(args[i + 1]) or 0.6
+			i += 2
 		elseif a == "--ss-restore" then
 			Constants.MATRIX.SUPERSHIELD_RESTORE = tonumber(args[i + 1]) or 2
 			i += 2
@@ -225,6 +234,23 @@ local STRATEGIES: { Strategy } = {
 			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 0.5 }
 		end,
 	},
+	-- Spends the run-up spurring instead of holding: no honesty bonus at all, but enough momentum to
+	-- break a slice on anything that lands. The pure "later" line.
+	{
+		name = "spurrer",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0, momentum = 1 }
+		end,
+	},
+	-- Splits the run-up: half the honesty bonus, and just enough momentum to break.
+	{
+		name = "splitter",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0.4, momentum = 0.6 }
+		end,
+	},
 	-- Plays the read: strikes where the opponent's habits say their Crit will be, and guards the
 	-- direction they most often strike. This is the realistic skilled player.
 	{
@@ -284,6 +310,7 @@ type Tally = {
 	-- time they are hit, so most matches end long before the bar empties. This histogram is how much
 	-- of the bar is real.
 	fallBuckets: { number },
+	breaks: number,
 }
 
 local LONG_SHOT_ODDS = 0.8 -- a fall at ≥80% stay-on odds is the dice overruling the meter
@@ -298,6 +325,7 @@ local function newTally(): Tally
 		totalUnhorseBalance = 0,
 		longShotFalls = 0,
 		fallBuckets = table.create(10, 0),
+		breaks = 0,
 	}
 end
 
@@ -314,6 +342,10 @@ end
 -- Returns 1 if A won, -1 if B won, 0 for a double-unhorse or a timeout.
 local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 	local balA, balB = Constants.BALANCE.START, Constants.BALANCE.START
+	-- Breaks persist for the whole match and are keyed to absolute directions, so they do not rotate
+	-- with the rider who took them.
+	local brokenA: { [string]: number } = {}
+	local brokenB: { [string]: number } = {}
 	local ctxA: Ctx = { selfBalance = balA, oppBalance = balB, oppAims = {}, oppShields = {} }
 	local ctxB: Ctx = { selfBalance = balB, oppBalance = balA, oppAims = {}, oppShields = {} }
 
@@ -335,7 +367,16 @@ local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 			commitB = sb.commit(ctxB)
 		end
 
+		commitA.broken, commitB.broken = brokenA, brokenB
 		local res = PR.resolve(commitA, commitB, { balance = balA }, { balance = balB }, rng)
+		if res.a.brokenDirection then
+			brokenA[res.a.brokenDirection] = (brokenA[res.a.brokenDirection] or 0) + 1
+			tally.breaks += 1
+		end
+		if res.b.brokenDirection then
+			brokenB[res.b.brokenDirection] = (brokenB[res.b.brokenDirection] or 0) + 1
+			tally.breaks += 1
+		end
 		tally.tiers[res.a.tier] += 1
 		tally.tiers[res.b.tier] += 1
 		balA, balB = res.a.balanceAfter, res.b.balanceAfter
@@ -434,6 +475,11 @@ local meanFallBalance = tally.totalUnhorseBalance / tally.unhorses
 local longShotRate = tally.longShotFalls / tally.unhorses
 print(string.format("convergence: %.2f passes per match on average (%d matches, %d hit the %d-pass cap)",
 	meanPasses, tally.passes, tally.timeouts, MAX_PASSES))
+if Constants.BREAK.ENABLED then
+	print(string.format("breaking: %.2f slices broken per match (momentum threshold %.2f)",
+		tally.breaks / tally.passes, Constants.BREAK.MOMENTUM_THRESHOLD))
+	print("")
+end
 print("where riders actually go down (Balance at the moment of the fall)")
 for b = 10, 1, -1 do
 	local share = tally.fallBuckets[b] / tally.unhorses

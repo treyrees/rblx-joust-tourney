@@ -35,6 +35,11 @@ export type Commitment = {
 	shield: Direction,
 	aim: Direction,
 	holdFraction: number,
+	-- Momentum banked by spurring in neutral, 0-1. Competes with holdFraction for the same run-up
+	-- seconds: time spent spurring is time not spent holding an aim.
+	momentum: number?,
+	-- Absolute directions this rider has had BROKEN, and how many times. Persists across passes.
+	broken: { [Direction]: number }?,
 }
 
 -- A rider's meter state going into the pass. `recovery` is the horse's teeter bonus (GAME_SPEC §6);
@@ -46,6 +51,7 @@ export type RiderState = {
 
 export type RiderOutcome = {
 	tier: Tier, -- the tier of the strike this rider RECEIVED
+	brokenDirection: Direction?, -- a direction of THIS rider's ring broken by the strike they took
 	guard: Direction,
 	supershielded: boolean,
 	damageTaken: number,
@@ -122,7 +128,35 @@ function PassResolver.ringClass(defender: Commitment, aim: Direction): string?
 	if off == nil then
 		return nil
 	end
-	return Constants.RING[(off + anchorOf(defender)) % PassResolver.notches()]
+	local class = Constants.RING[(off + anchorOf(defender)) % PassResolver.notches()]
+	-- Degrade the slice by however many times this absolute direction has been broken.
+	local steps = if Constants.BREAK.ENABLED then ((defender.broken or {})[aim] or 0) else 0
+	for _ = 1, steps do
+		if class == "guard" then
+			class = "normal"
+		elseif class == "normal" then
+			class = "crit"
+		end
+	end
+	return class
+end
+
+-- Does this strike break the direction it landed on? Slice-agnostic by design: it asks only how much
+-- buildup the attacker carried, never what the slice was.
+function PassResolver.breaks(attacker: Commitment, tier: Tier): boolean
+	if not Constants.BREAK.ENABLED then
+		return false
+	end
+	if tier == "weak" then
+		return false
+	end
+	if tier == "blocked" and not Constants.BREAK.BLOCKED_BREAKS then
+		return false
+	end
+	local fuel = if Constants.BREAK.TRIGGER == "proration"
+		then attacker.holdFraction
+		else (attacker.momentum or 0)
+	return fuel >= Constants.BREAK.MOMENTUM_THRESHOLD
 end
 
 -- Every direction whose ring class is `class`, in ring order. Shared by `guards` and `crits`.
@@ -289,7 +323,11 @@ function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): 
 	if base == 0 or tier == "weak" then
 		return base, tier
 	end
-	local bonus = Constants.PRORATION.MAX_BONUS * PassResolver.proration(attacker.holdFraction)
+	-- Whichever currency is NOT breaking slices is the one that multiplies damage.
+	local fuel = if Constants.BREAK.ENABLED and Constants.BREAK.TRIGGER == "proration"
+		then (attacker.momentum or 0)
+		else attacker.holdFraction
+	local bonus = Constants.PRORATION.MAX_BONUS * PassResolver.proration(fuel)
 	-- The Supershield pays offence too (ADR 0005): flat, additive with proration, and earned by the
 	-- ATTACKER's own defensive shape rather than by anything about this strike.
 	if PassResolver.isSupershielded(attacker) then
@@ -345,6 +383,7 @@ function PassResolver.resolve(
 		restore = restoreA,
 		balanceBefore = stateA.balance,
 		balanceAfter = afterA,
+		brokenDirection = if PassResolver.breaks(commitB, tierA) then commitB.aim else nil,
 		unhorsed = false,
 	}
 	local outB: RiderOutcome = {
@@ -355,6 +394,7 @@ function PassResolver.resolve(
 		restore = restoreB,
 		balanceBefore = stateB.balance,
 		balanceAfter = afterB,
+		brokenDirection = if PassResolver.breaks(commitA, tierB) then commitA.aim else nil,
 		unhorsed = false,
 	}
 

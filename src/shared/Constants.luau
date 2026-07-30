@@ -96,6 +96,30 @@ Constants.GUARD_MODE = "block"
 --                 to come back to, priced against the crit they could be chasing instead.
 Constants.SHIELD_MODE = "block"
 
+-- BREAKING (GAME_SPEC §5's depleting coverage, with the trigger moved).
+-- A strike that lands carrying enough buildup BREAKS the direction it hit, degrading that slice of
+-- the defender's ring one step down the ladder for the rest of the match:
+--     guard -> normal -> crit -> (stays crit)
+-- The trigger is deliberately slice-AGNOSTIC. Crits are already the slice-keyed reward, so breaking
+-- is keyed to MOMENTUM alone - the speed built by spurring in neutral during the run-up.
+-- Deliberately not proration: proration already owns the damage multiplier, and giving it breaking
+-- too would have one currency doing both jobs. Speed owned nothing, and structural force is what a
+-- fast horse should diegetically do. The run-up's single allocation - hold an aim or spur - then
+-- becomes the game's now-versus-later: a bigger roll this pass, or a worse ring for the rest of the
+-- match.
+-- Breaks attach to ABSOLUTE directions, not ring offsets, or they would rotate with the defender and
+-- mean nothing. Anchored to the world they become a hole the defender must steer around, which puts
+-- them on the same footing as the Shield and gives rotation a second, growing cost.
+Constants.BREAK = {
+	ENABLED = false,
+	-- Which buildup currency breaks slices, and by implication which one keeps the damage multiplier.
+	-- "momentum" is the argued default; "proration" swaps the two so the pairing can be tested rather
+	-- than assumed.
+	TRIGGER = "momentum",
+	MOMENTUM_THRESHOLD = 0.6, -- momentum at or above which a landed strike breaks a slice
+	BLOCKED_BREAKS = true, -- battering a guard should break it, so blocked strikes crack too
+}
+
 -- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
 -- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
 -- which by polarization is the direction they are themselves aiming ("you are exposed exactly where
