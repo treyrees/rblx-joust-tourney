@@ -15,7 +15,8 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
    order bias. Server-authoritative; client is display-only during resolution.
 4. **Aim state is quantized** to the four sectors (+ neutral). Animation may be smooth; the televised
    state is always discrete. Aim locks shortly before the tick — no ping wars.
-5. **Beginner-ignorable depth.** Guard somewhere + aim somewhere is complete, legal play. No layer
+5. **Beginner-ignorable depth.** Shield somewhere + aim somewhere is complete, legal play — those two
+   are the only inputs; Guard and Crit are derived (ADR 0004, [docs/design/GLOSSARY.md](docs/design/GLOSSARY.md)). No layer
    (signaling, proration, archetypes) may become required literacy at low ranks.
 6. **RNG is always visible.** Odds on screen before the roll; every loss decomposes to "read" or
    "roll." No mystery randomness, ever.
