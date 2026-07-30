@@ -47,9 +47,19 @@ local RETIRED_PROCS: { string } = {}
 -- term → the human note for the warning. Legacy-reference docs (maps-to entirely under `legacy/`)
 -- are exempt.
 --
--- Empty for the same reason: the one entry here named a currency cut from the predecessor's economy,
--- a concept this repo has never had.
-local RETIRED_VOCAB: { [string]: string } = {}
+-- First real entries land with ADR 0004, which renamed the pass's defensive vocabulary. Each of these
+-- named a live concept in ADR 0001's wording and must never resurface as current: the mechanic still
+-- exists, so a stale mention reads as correct rather than as obviously broken — which is exactly the
+-- drift this check exists to catch.
+--
+-- Deliberately NOT listed: "stack" / "stacked" / "stacking". They are ordinary English elsewhere in
+-- these docs ("a stack of small merged PRs" in WORKFLOW.md), so listing them would produce false
+-- positives that train people to ignore the warning. The two-word guard terms below are unambiguous.
+local RETIRED_VOCAB: { [string]: string } = {
+	["passive guard"] = "renamed to the Shield by ADR 0004",
+	["active guard"] = "renamed to the Guard by ADR 0004",
+	["punish hole"] = "renamed to the Crit by ADR 0004",
+}
 
 -- Words that mark a retired-proc / retired-vocab mention as deliberate history, not a live claim.
 local SUPERSESSION_MARKERS: { string } = {
@@ -459,7 +469,7 @@ end
 -- system (BASE_SPEED, TICKS_BY_AGGRO, ARMOR_MITIGATION, …), none of which exist here — so the
 -- backstop could not have caught a single Joust combat ADR that forgot its flag.
 local COMBAT_AXIS_TOKENS: { string } = {
-	"NORMAL_DAMAGE", "PUNISHED_DAMAGE", "WEAK_DAMAGE", "THIN_BLOCK_MULT", "STACK_BLOCK_RESTORE",
+	"NORMAL_DAMAGE", "CRIT_DAMAGE", "WEAK_DAMAGE", "THIN_BLOCK_MULT", "SUPERSHIELD_RESTORE",
 	"MAX_BONUS", "EASE_EXPONENT", "AIM_LOCK_BEFORE_TICK", "AIM_LOCK_MAX_RUNUP_FRACTION",
 	"MIN_RUNUP_SECONDS",
 }

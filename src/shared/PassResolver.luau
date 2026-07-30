@@ -19,20 +19,20 @@ local PassResolver = {}
 
 export type Direction = "in" | "out" | "up" | "down" | "neutral"
 
--- blocked  — the strike met a guard (clean if the defender stacked, thin otherwise)
--- normal   — an uncontested strike
--- punished — struck in the hole the defender's own aim opened, and left uncovered
--- weak     — a neutral-aim strike: chip damage, no punish potential, no honesty buff (§3 baseline 1)
-export type Tier = "blocked" | "normal" | "punished" | "weak"
+-- blocked — the strike met the Shield or the Guard (clean if the defender supershielded, thin otherwise)
+-- normal  — an uncontested strike
+-- crit    — struck in the Crit the defender's own Aim opened, and left uncovered
+-- weak    — a neutral-aim strike: chip damage, no crit potential, no honesty buff (§3 baseline 1)
+export type Tier = "blocked" | "normal" | "crit" | "weak"
 
 -- One rider's snapshotted commitment at the tick.
---   passiveGuard — chosen in intermission, hidden until impact (the hole card)
+--   shield       — chosen in intermission, hidden until impact (the hole card)
 --   aim          — the televised spear direction, quantized to a sector (invariant 4)
 --   holdFraction — fraction of the run-up this FINAL aim was held, 0–1. Normalized rather than
 --                  measured in seconds so the proration curve is identical however long the run-up
 --                  actually lasts.
 export type Commitment = {
-	passiveGuard: Direction,
+	shield: Direction,
 	aim: Direction,
 	holdFraction: number,
 }
@@ -46,8 +46,8 @@ export type RiderState = {
 
 export type RiderOutcome = {
 	tier: Tier, -- the tier of the strike this rider RECEIVED
-	activeGuard: Direction,
-	stacked: boolean,
+	guard: Direction,
+	supershielded: boolean,
 	damageTaken: number,
 	restore: number,
 	balanceBefore: number,
@@ -73,18 +73,27 @@ function PassResolver.opposite(dir: Direction): Direction
 	return opp :: Direction
 end
 
--- Polarization (§3): the active guard is ALWAYS the opposite of the aim, so one input carries attack
--- and defense together. A neutral aim yields no active guard at all (§3 neutral baseline 2) —
--- maximally soft, which is what prices cageyness.
-function PassResolver.activeGuard(commitment: Commitment): Direction
+-- Polarization (§3): the Guard is ALWAYS the opposite of the Aim, so one input carries attack and
+-- defense together. A neutral aim yields no Guard at all (§3 neutral baseline 2) — maximally soft,
+-- which is what prices cageyness.
+function PassResolver.guard(commitment: Commitment): Direction
 	return PassResolver.opposite(commitment.aim)
 end
 
--- Stacking (§3): the binary defensive bonus, awarded iff the active guard matches the passive guard
--- at the tick. Neutral never stacks — there is nothing to stack onto.
-function PassResolver.isStacked(commitment: Commitment): boolean
-	local active = PassResolver.activeGuard(commitment)
-	return active ~= Constants.DIRECTIONS.NEUTRAL and active == commitment.passiveGuard
+-- The Crit direction: opposite the Guard, and therefore — by polarization — identically the rider's
+-- own Aim. It is named separately from `aim` because the two are the same direction read for opposite
+-- purposes: `aim` is where this rider threatens, `crit` is where this rider is exposed. Every piece of
+-- player-facing copy about being hit points here, so the concept earns a name even though the body of
+-- the function is a tautology.
+function PassResolver.crit(commitment: Commitment): Direction
+	return commitment.aim
+end
+
+-- Supershielding (§3): the binary defensive bonus, awarded iff the Guard lands on the Shield at the
+-- tick. Neutral never supershields — there is nothing to guard over.
+function PassResolver.isSupershielded(commitment: Commitment): boolean
+	local guard = PassResolver.guard(commitment)
+	return guard ~= Constants.DIRECTIONS.NEUTRAL and guard == commitment.shield
 end
 
 -- ---- proration ---------------------------------------------------------------------------------
@@ -118,44 +127,44 @@ end
 -- Resolve one direction of the pass: what tier does `attacker`'s strike land at against `defender`?
 --
 -- The whole rule, in four clauses:
---   1. A neutral aim is always WEAK — it cannot be blocked and it cannot punish.
---   2. The defender's coverage is {active guard, passive guard}. A strike into it is BLOCKED.
---   3. The defender's hole is the direction opposite their own active guard — which, by
---      polarization, is exactly the direction they are aiming. Struck there and uncovered: PUNISHED.
+--   1. A neutral aim is always WEAK — it cannot be blocked and it cannot crit.
+--   2. The defender's coverage is {Guard, Shield}. A strike into it is BLOCKED.
+--   3. The defender's Crit is the direction opposite their own Guard — which, by polarization, is
+--      exactly the direction they are aiming. Struck there and uncovered: CRIT.
 --      "You are exposed exactly where you strike."
 --   4. Anything else is NORMAL.
 --
--- Clause 3 is why the passive guard matters: it is the one bit of hidden information that decides
--- whether the defender's own telegraphed aim is a hole or not.
+-- Clause 3 is why the Shield matters: it is the one bit of hidden information that decides whether the
+-- defender's own telegraphed Aim is a Crit or not.
 function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 	local NEUTRAL = Constants.DIRECTIONS.NEUTRAL
 	if attacker.aim == NEUTRAL then
 		return "weak"
 	end
 
-	local active = PassResolver.activeGuard(defender)
-	local covered = (active ~= NEUTRAL and attacker.aim == active)
-		or (defender.passiveGuard ~= NEUTRAL and attacker.aim == defender.passiveGuard)
+	local guard = PassResolver.guard(defender)
+	local covered = (guard ~= NEUTRAL and attacker.aim == guard)
+		or (defender.shield ~= NEUTRAL and attacker.aim == defender.shield)
 	if covered then
 		return "blocked"
 	end
 
-	if active ~= NEUTRAL and attacker.aim == PassResolver.opposite(active) then
-		return "punished"
+	if guard ~= NEUTRAL and attacker.aim == PassResolver.crit(defender) then
+		return "crit"
 	end
 	return "normal"
 end
 
 -- Base Balance damage for a tier, before the offensive bonus. A blocked strike is folded in here so
 -- the thin/clean distinction (§3's "deeply" vs "thinly") lives in one place.
-function PassResolver.baseDamage(tier: Tier, defenderStacked: boolean): number
+function PassResolver.baseDamage(tier: Tier, defenderSupershielded: boolean): number
 	local M = Constants.MATRIX
 	if tier == "blocked" then
-		return if defenderStacked then 0 else M.NORMAL_DAMAGE * M.THIN_BLOCK_MULT
+		return if defenderSupershielded then 0 else M.NORMAL_DAMAGE * M.THIN_BLOCK_MULT
 	elseif tier == "normal" then
 		return M.NORMAL_DAMAGE
-	elseif tier == "punished" then
-		return M.PUNISHED_DAMAGE
+	elseif tier == "crit" then
+		return M.CRIT_DAMAGE
 	elseif tier == "weak" then
 		return M.WEAK_DAMAGE
 	end
@@ -166,7 +175,7 @@ end
 -- A weak (neutral) strike takes no bonus at all — §3 baseline 1's "zero honesty buff".
 function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): (number, Tier)
 	local tier = PassResolver.tier(attacker, defender)
-	local base = PassResolver.baseDamage(tier, PassResolver.isStacked(defender))
+	local base = PassResolver.baseDamage(tier, PassResolver.isSupershielded(defender))
 	if base == 0 or tier == "weak" then
 		return base, tier
 	end
@@ -199,24 +208,24 @@ function PassResolver.resolve(
 	stateB: RiderState,
 	rng: () -> number
 ): PassResult
-	local stackedA, stackedB = PassResolver.isStacked(commitA), PassResolver.isStacked(commitB)
+	local superA, superB = PassResolver.isSupershielded(commitA), PassResolver.isSupershielded(commitB)
 
 	-- Snapshot phase: every strike reads only the pre-pass commitments.
 	local damageToB, tierB = PassResolver.strikeDamage(commitA, commitB)
 	local damageToA, tierA = PassResolver.strikeDamage(commitB, commitA)
 
-	-- The defensive bonus: a clean (stacked) block restores Balance — blocking is a win, not a
+	-- The defensive bonus: a clean (supershielded) block restores Balance — blocking is a win, not a
 	-- non-loss (§4) — capped well below a normal hit so Balance still only trends down.
-	local restoreA = if tierA == "blocked" and stackedA then Constants.MATRIX.STACK_BLOCK_RESTORE else 0
-	local restoreB = if tierB == "blocked" and stackedB then Constants.MATRIX.STACK_BLOCK_RESTORE else 0
+	local restoreA = if tierA == "blocked" and superA then Constants.MATRIX.SUPERSHIELD_RESTORE else 0
+	local restoreB = if tierB == "blocked" and superB then Constants.MATRIX.SUPERSHIELD_RESTORE else 0
 
 	local afterA = clampBalance(stateA.balance - damageToA + restoreA)
 	local afterB = clampBalance(stateB.balance - damageToB + restoreB)
 
 	local outA: RiderOutcome = {
 		tier = tierA,
-		activeGuard = PassResolver.activeGuard(commitA),
-		stacked = stackedA,
+		guard = PassResolver.guard(commitA),
+		supershielded = superA,
 		damageTaken = damageToA,
 		restore = restoreA,
 		balanceBefore = stateA.balance,
@@ -225,8 +234,8 @@ function PassResolver.resolve(
 	}
 	local outB: RiderOutcome = {
 		tier = tierB,
-		activeGuard = PassResolver.activeGuard(commitB),
-		stacked = stackedB,
+		guard = PassResolver.guard(commitB),
+		supershielded = superB,
 		damageTaken = damageToB,
 		restore = restoreB,
 		balanceBefore = stateB.balance,

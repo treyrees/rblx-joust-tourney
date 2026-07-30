@@ -76,7 +76,7 @@ type Ctx = {
 	selfBalance: number,
 	oppBalance: number,
 	oppAims: { string }, -- opponent's revealed aim, oldest first
-	oppGuards: { string }, -- opponent's revealed passive guard, oldest first
+	oppShields: { string }, -- opponent's revealed Shield, oldest first
 	oppCommit: any?, -- clairvoyant strategies only
 }
 
@@ -106,44 +106,44 @@ local STRATEGIES: { Strategy } = {
 	{
 		name = "random",
 		commit = function(_ctx)
-			return { passiveGuard = pick(FOUR), aim = pick(FOUR), holdFraction = rng() }
+			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = rng() }
 		end,
 	},
 	-- Neutral-camping: never commits an aim. Invariant 7 says this must not be viable.
 	{
 		name = "camper",
 		commit = function(_ctx)
-			return { passiveGuard = pick(FOUR), aim = D.NEUTRAL, holdFraction = 1 }
+			return { shield = pick(FOUR), aim = D.NEUTRAL, holdFraction = 1 }
 		end,
 	},
-	-- Always stacks: maximum depth, but its own aim direction is left as an open hole.
+	-- Always supershields: maximum depth, but its own Aim direction is left as an open Crit.
 	{
-		name = "stacker",
+		name = "supershield",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { passiveGuard = Constants.OPPOSITE[aim], aim = aim, holdFraction = 1 }
+			return { shield = Constants.OPPOSITE[aim], aim = aim, holdFraction = 1 }
 		end,
 	},
-	-- Always covers its own hole with the passive guard. The safe, bonus-less shape.
+	-- Always covers its own Crit with the Shield. The safe, bonus-less shape.
 	{
 		name = "axis",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { passiveGuard = aim, aim = aim, holdFraction = 1 }
+			return { shield = aim, aim = aim, holdFraction = 1 }
 		end,
 	},
 	-- Commits early and never flinches: full honesty bonus, fully readable.
 	{
 		name = "honest",
 		commit = function(_ctx)
-			return { passiveGuard = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
+			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
 		end,
 	},
 	-- Always flicks at the last instant: unreadable, but pays the full proration tax.
 	{
 		name = "flicker",
 		commit = function(_ctx)
-			return { passiveGuard = pick(FOUR), aim = pick(FOUR), holdFraction = 0 }
+			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 0 }
 		end,
 	},
 	-- Shows an aim, then switches at the halfway mark: the archetypal bluff. The proration curve
@@ -152,17 +152,17 @@ local STRATEGIES: { Strategy } = {
 	{
 		name = "halfer",
 		commit = function(_ctx)
-			return { passiveGuard = pick(FOUR), aim = pick(FOUR), holdFraction = 0.5 }
+			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 0.5 }
 		end,
 	},
-	-- Plays the read: strikes where the opponent's habits say their hole will be, and guards the
+	-- Plays the read: strikes where the opponent's habits say their Crit will be, and guards the
 	-- direction they most often strike. This is the realistic skilled player.
 	{
 		name = "counter",
 		commit = function(ctx)
 			local theirAim = mostFrequent(ctx.oppAims)
 			local aim = if theirAim and theirAim ~= D.NEUTRAL then theirAim else pick(FOUR)
-			return { passiveGuard = aim, aim = aim, holdFraction = 0.9 }
+			return { shield = aim, aim = aim, holdFraction = 0.9 }
 		end,
 	},
 	-- The ceiling, not a player: sees the opponent's commitment and picks the best aim against it.
@@ -173,17 +173,17 @@ local STRATEGIES: { Strategy } = {
 		commit = function(ctx)
 			local opp = ctx.oppCommit
 			if not opp then
-				return { passiveGuard = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
+				return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
 			end
 			local bestAim, bestDmg = FOUR[1], -1
 			for _, aim in FOUR do
-				local dmg = PR.strikeDamage({ passiveGuard = D.IN, aim = aim, holdFraction = 1 }, opp)
+				local dmg = PR.strikeDamage({ shield = D.IN, aim = aim, holdFraction = 1 }, opp)
 				if dmg > bestDmg then
 					bestAim, bestDmg = aim, dmg
 				end
 			end
-			-- Guard the hole its own aim opens, since it cannot read the opponent's aim in return.
-			return { passiveGuard = bestAim, aim = bestAim, holdFraction = 1 }
+			-- Cover the Crit its own Aim opens, since it cannot read the opponent's Aim in return.
+			return { shield = bestAim, aim = bestAim, holdFraction = 1 }
 		end,
 	},
 }
@@ -207,7 +207,7 @@ local LONG_SHOT_ODDS = 0.8 -- a fall at ≥80% stay-on odds is the dice overruli
 
 local function newTally(): Tally
 	return {
-		tiers = { blocked = 0, normal = 0, punished = 0, weak = 0 },
+		tiers = { blocked = 0, normal = 0, crit = 0, weak = 0 },
 		passes = 0,
 		totalPasses = 0,
 		timeouts = 0,
@@ -228,8 +228,8 @@ end
 -- Returns 1 if A won, -1 if B won, 0 for a double-unhorse or a timeout.
 local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 	local balA, balB = Constants.BALANCE.START, Constants.BALANCE.START
-	local ctxA: Ctx = { selfBalance = balA, oppBalance = balB, oppAims = {}, oppGuards = {} }
-	local ctxB: Ctx = { selfBalance = balB, oppBalance = balA, oppAims = {}, oppGuards = {} }
+	local ctxA: Ctx = { selfBalance = balA, oppBalance = balB, oppAims = {}, oppShields = {} }
+	local ctxB: Ctx = { selfBalance = balB, oppBalance = balA, oppAims = {}, oppShields = {} }
 
 	for pass = 1, MAX_PASSES do
 		ctxA.selfBalance, ctxA.oppBalance = balA, balB
@@ -256,9 +256,9 @@ local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 
 		-- Post-pass reveal (§8): both commitments become public history.
 		table.insert(ctxA.oppAims, commitB.aim)
-		table.insert(ctxA.oppGuards, commitB.passiveGuard)
+		table.insert(ctxA.oppShields, commitB.shield)
 		table.insert(ctxB.oppAims, commitA.aim)
-		table.insert(ctxB.oppGuards, commitA.passiveGuard)
+		table.insert(ctxB.oppShields, commitA.shield)
 
 		if res.a.unhorsed or res.b.unhorsed then
 			tally.passes += 1
@@ -284,12 +284,12 @@ end
 -- ---- run ---------------------------------------------------------------------------------------
 print(string.format("sim — %d matches per pairing, seed %d, curve %s", matches, seed, Constants.PRORATION.CURVE))
 print(string.format(
-	"matrix: normal %.1f  punished %.1f  weak %.1f  thin-block x%.2f  restore %.1f  max-bonus %.2f",
+	"matrix: normal %.1f  crit %.1f  weak %.1f  thin-block x%.2f  restore %.1f  max-bonus %.2f",
 	Constants.MATRIX.NORMAL_DAMAGE,
-	Constants.MATRIX.PUNISHED_DAMAGE,
+	Constants.MATRIX.CRIT_DAMAGE,
 	Constants.MATRIX.WEAK_DAMAGE,
 	Constants.MATRIX.THIN_BLOCK_MULT,
-	Constants.MATRIX.STACK_BLOCK_RESTORE,
+	Constants.MATRIX.SUPERSHIELD_RESTORE,
 	Constants.PRORATION.MAX_BONUS
 ))
 print("")
@@ -325,7 +325,7 @@ for _, n in tally.tiers do
 	totalStrikes += n
 end
 print("tier distribution across every strike")
-for _, t in { "blocked", "normal", "punished", "weak" } do
+for _, t in { "blocked", "normal", "crit", "weak" } do
 	print(string.format("  %-9s %6.2f%%", t, 100 * tally.tiers[t] / totalStrikes))
 end
 print("")
@@ -348,7 +348,7 @@ for _, sb in STRATEGIES do
 end
 print(header)
 for _, sa in STRATEGIES do
-	local row = string.format("%-10s", sa.name)
+	local row = string.format("%-12s", sa.name)
 	for _, sb in STRATEGIES do
 		if sa.name == sb.name then
 			row ..= string.format("%9s", "-")
@@ -377,7 +377,7 @@ table.sort(standing, function(x, y)
 end)
 print("standing (mean win rate vs the non-oracle field)")
 for rank, s in standing do
-	print(string.format("  %d. %-9s %5.1f%%", rank, s.name, 100 * s.score))
+	print(string.format("  %d. %-11s %5.1f%%", rank, s.name, 100 * s.score))
 end
 print("")
 
