@@ -23,7 +23,7 @@ export type Direction = "in" | "out" | "up" | "down" | "neutral"
 -- normal  — an uncontested strike
 -- crit    — struck in the Crit the defender's own Aim opened, and left uncovered
 -- weak    — a neutral-aim strike: chip damage, no crit potential, no honesty buff (§3 baseline 1)
-export type Tier = "blocked" | "normal" | "crit" | "weak"
+export type Tier = "blocked" | "normal" | "crit" | "weak" | "mortal"
 
 -- One rider's snapshotted commitment at the tick.
 --   shield       — chosen in intermission, hidden until impact (the hole card)
@@ -136,6 +136,8 @@ function PassResolver.ringClass(defender: Commitment, aim: Direction): string?
 			class = "normal"
 		elseif class == "normal" then
 			class = "crit"
+		elseif class == "crit" and Constants.BREAK.MORTAL then
+			class = "mortal"
 		end
 	end
 	return class
@@ -217,6 +219,10 @@ function PassResolver.isSupershielded(commitment: Commitment): boolean
 	if commitment.shield == Constants.DIRECTIONS.NEUTRAL then
 		return false
 	end
+	-- Defence, like offence, may have to be held rather than merely arrived at.
+	if commitment.holdFraction < Constants.SUPERSHIELD_MIN_HOLD then
+		return false
+	end
 	-- Depth: the Shield stacked onto a direction the aim already guards. With a band wider than one
 	-- notch it is enough that any covered notch is a guard notch.
 	for off = 0, Constants.SHIELD_BAND - 1 do
@@ -286,6 +292,9 @@ function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 	if (class == "guard" and guardBlocks) or shieldBlocks then
 		return "blocked"
 	end
+	if class == "mortal" then
+		return "mortal"
+	end
 	if class == "crit" then
 		return "crit"
 	end
@@ -304,6 +313,9 @@ function PassResolver.baseDamage(tier: Tier, defenderSupershielded: boolean): nu
 		return M.CRIT_DAMAGE
 	elseif tier == "weak" then
 		return M.WEAK_DAMAGE
+	elseif tier == "mortal" then
+		-- The damage is beside the point; `resolve` unhorses on this tier without a roll.
+		return M.CRIT_DAMAGE
 	end
 	error("PassResolver.baseDamage: unknown tier: " .. tostring(tier))
 end
@@ -401,10 +413,14 @@ function PassResolver.resolve(
 	-- Rolls are drawn A-then-B for reproducibility under a seeded rng. Order cannot bias the
 	-- OUTCOME (each rider rolls against their own meter, and neither roll feeds the other), only the
 	-- sequence in which the two draws are consumed.
-	if damageToA > 0 then
+	if tierA == "mortal" then
+		outA.unhorsed, outA.stayChance = true, 0
+	elseif damageToA > 0 then
 		outA.stayChance, outA.roll, outA.unhorsed = teeter(afterA, stateA.recovery or 0, rng)
 	end
-	if damageToB > 0 then
+	if tierB == "mortal" then
+		outB.unhorsed, outB.stayChance = true, 0
+	elseif damageToB > 0 then
 		outB.stayChance, outB.roll, outB.unhorsed = teeter(afterB, stateB.recovery or 0, rng)
 	end
 

@@ -67,6 +67,12 @@ do
 		elseif a == "--breaking" then
 			Constants.BREAK.ENABLED = true
 			i += 1
+		elseif a == "--ss-hold" then
+			Constants.SUPERSHIELD_MIN_HOLD = tonumber(args[i + 1]) or 0
+			i += 2
+		elseif a == "--mortal" then
+			Constants.BREAK.MORTAL = true
+			i += 1
 		elseif a == "--swap" then
 			Constants.BREAK.TRIGGER = "proration"
 			i += 1
@@ -256,6 +262,17 @@ local STRATEGIES: { Strategy } = {
 			return { shield = critOf(aim), aim = aim, holdFraction = 0.4, momentum = 0.6 }
 		end,
 	},
+	-- The double-dip the design has to answer for: spurs the entire run-up for full momentum, then
+	-- snaps into the aim whose Guard lands on its pre-placed Shield at the tick. Under the shipped
+	-- rule that buys breaking AND a free Supershield, paying only the damage multiplier. This is the
+	-- strategy Constants.SUPERSHIELD_MIN_HOLD exists to price.
+	{
+		name = "opportunist",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = guardOf(aim), aim = aim, holdFraction = 0, momentum = 1 }
+		end,
+	},
 	-- Plays the read: strikes where the opponent's habits say their Crit will be, and guards the
 	-- direction they most often strike. This is the realistic skilled player.
 	{
@@ -322,7 +339,7 @@ local LONG_SHOT_ODDS = 0.8 -- a fall at ≥80% stay-on odds is the dice overruli
 
 local function newTally(): Tally
 	return {
-		tiers = { blocked = 0, normal = 0, crit = 0, weak = 0 },
+		tiers = { blocked = 0, normal = 0, crit = 0, weak = 0, mortal = 0 },
 		passes = 0,
 		totalPasses = 0,
 		timeouts = 0,
@@ -469,7 +486,7 @@ for _, n in tally.tiers do
 	totalStrikes += n
 end
 print("tier distribution across every strike")
-for _, t in { "blocked", "normal", "crit", "weak" } do
+for _, t in { "blocked", "normal", "crit", "weak", "mortal" } do
 	print(string.format("  %-9s %6.2f%%", t, 100 * tally.tiers[t] / totalStrikes))
 end
 print("")

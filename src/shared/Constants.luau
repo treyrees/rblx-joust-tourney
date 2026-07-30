@@ -96,6 +96,15 @@ Constants.GUARD_MODE = "block"
 --                 to come back to, priced against the crit they could be chasing instead.
 Constants.SHIELD_MODE = "block"
 
+-- Does the Supershield have to be EARNED over the run-up, or merely arrived at?
+-- Offence is prorated: a last-instant flick forfeits the damage multiplier. Defence is not, so the
+-- same flick collects the full defensive bonus for free - which lets a rider spur the whole run-up
+-- for momentum, snap into alignment at the tick, and take breaking AND perfect defence while paying
+-- only in damage. Requiring the aligning aim to have been HELD prices defence the way offence is
+-- already priced, so speed costs directional power on both halves of the pass rather than one.
+-- 0 is the shipped behaviour (arrive-and-collect).
+Constants.SUPERSHIELD_MIN_HOLD = 0
+
 -- BREAKING (GAME_SPEC §5's depleting coverage, with the trigger moved).
 -- A strike that lands carrying enough buildup BREAKS the direction it hit, degrading that slice of
 -- the defender's ring one step down the ladder for the rest of the match:
@@ -116,7 +125,12 @@ Constants.BREAK = {
 	-- "momentum" is the argued default; "proration" swaps the two so the pairing can be tested rather
 	-- than assumed.
 	TRIGGER = "momentum",
-	MOMENTUM_THRESHOLD = 0.6, -- momentum at or above which a landed strike breaks a slice
+	MOMENTUM_THRESHOLD = 0.6,
+	-- Does the ladder continue past crit into a MORTAL slice - struck there and uncovered, the rider
+	-- goes down with no roll at all? It inverts how the match ends: falls are normally decided by a
+	-- teeter the rider was usually favoured to win, so a mortal slice moves the endgame from the dice
+	-- back onto a read, which is what invariant 1 says should decide things.
+	MORTAL = false, -- momentum at or above which a landed strike breaks a slice
 	BLOCKED_BREAKS = true, -- battering a guard should break it, so blocked strikes crack too
 }
 
