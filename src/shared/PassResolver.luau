@@ -290,6 +290,11 @@ function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): 
 		return base, tier
 	end
 	local bonus = Constants.PRORATION.MAX_BONUS * PassResolver.proration(attacker.holdFraction)
+	-- The Supershield pays offence too (ADR 0005): flat, additive with proration, and earned by the
+	-- ATTACKER's own defensive shape rather than by anything about this strike.
+	if PassResolver.isSupershielded(attacker) then
+		bonus += Constants.MATRIX.SUPERSHIELD_STRIKE_BONUS
+	end
 	return base * (1 + bonus), tier
 end
 

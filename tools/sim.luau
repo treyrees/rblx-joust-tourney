@@ -59,6 +59,12 @@ do
 				end
 			end
 			i += 2
+		elseif a == "--ss-restore" then
+			Constants.MATRIX.SUPERSHIELD_RESTORE = tonumber(args[i + 1]) or 2
+			i += 2
+		elseif a == "--ss-bonus" then
+			Constants.MATRIX.SUPERSHIELD_STRIKE_BONUS = tonumber(args[i + 1]) or 0
+			i += 2
 		elseif a == "--shield-mode" then
 			Constants.SHIELD_MODE = args[i + 1]
 			i += 2

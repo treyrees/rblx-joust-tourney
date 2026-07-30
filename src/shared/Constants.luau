@@ -112,6 +112,12 @@ Constants.MATRIX = {
 	-- nullifies most of the strike but not all of it, and earns no restore.
 	SUPERSHIELD_RESTORE = 2,
 	THIN_BLOCK_MULT = 0.5,
+	-- ADR 0005 settles that the Supershield must pay offence as well as defence, and deliberately
+	-- pins no number. This is that number: a strike multiplier the rider earns for supershielding.
+	-- 0 is the shipped behaviour. The target is PARITY, not generosity - stacking on the Guard has to
+	-- be worth about what covering a crit notch is worth, so that neither placement dominates and the
+	-- Shield's position stays genuinely unknown.
+	SUPERSHIELD_STRIKE_BONUS = 0,
 }
 
 -- The offensive bonus (GAME_SPEC §3): prorated by the fraction of the run-up the *final* aim was
