@@ -56,6 +56,9 @@ do
 		elseif args[i] == "--sort" then
 			sortKey = args[i + 1] or "read"
 			i += 2
+		elseif args[i] == "--shield-mode" then
+			Constants.SHIELD_MODE = args[i + 1]
+			i += 2
 		elseif args[i] == "--guard-mode" then
 			Constants.GUARD_MODE = args[i + 1]
 			i += 2

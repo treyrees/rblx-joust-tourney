@@ -83,6 +83,19 @@ Constants.SHIELD_BAND = 1
 --                 and Guard matching up" becomes the actual source of the bonus rather than a rebate.
 Constants.GUARD_MODE = "block"
 
+-- What the Shield does on its own.
+--   "block"     — the Shield blocks wherever it is placed, and stacking it on a Guard notch upgrades
+--                 that block to clean. Shipped rule. It makes the Shield do two competing jobs, and
+--                 the cheaper one always wins: covering a crit notch saves ~21 Balance, stacking on
+--                 the Guard saves ~5, so the Supershield is never taken.
+--   "amplifier" — the Shield blocks NOTHING by itself. Defence comes from the Guard, which sweeps
+--                 with the aim; the Shield is placed once, in the world, and upgrades the Guard to a
+--                 clean block when the rider's rotation brings the two together. The Shield then has
+--                 exactly one job, cannot be spent on covering a crit, and its whole value is the
+--                 second defensive axis GAME_SPEC §3 wanted it to be: a fixed home the rider is paid
+--                 to come back to, priced against the crit they could be chasing instead.
+Constants.SHIELD_MODE = "block"
+
 -- The matrix (GAME_SPEC §4): Aim vs Shield/Guard resolves to a tier; tiers translate to Balance damage.
 -- CRIT_DAMAGE is the tier for a strike into the Crit — the direction opposite the defender's Guard,
 -- which by polarization is the direction they are themselves aiming ("you are exposed exactly where

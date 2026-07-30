@@ -246,7 +246,10 @@ function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 
 	local class = PassResolver.ringClass(defender, attacker.aim)
 	local guardBlocks = Constants.GUARD_MODE ~= "amplifier"
-	if (class == "guard" and guardBlocks) or PassResolver.shielded(defender, attacker.aim) then
+	-- An amplifier Shield contributes no coverage of its own; it only upgrades a Guard notch.
+	local shieldBlocks = Constants.SHIELD_MODE ~= "amplifier"
+		and PassResolver.shielded(defender, attacker.aim)
+	if (class == "guard" and guardBlocks) or shieldBlocks then
 		return "blocked"
 	end
 	if class == "crit" then
@@ -278,7 +281,7 @@ function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): 
 	-- A block is clean when the Shield and a Guard notch coincide AT THE STRUCK NOTCH. Under the
 	-- shipped "block" mode the defender-wide test is equivalent, since the Shield-on-Guard notch is
 	-- the only one that can be struck cleanly; under "amplifier" it is not, so ask per strike.
-	local clean = if Constants.GUARD_MODE == "amplifier"
+	local clean = if Constants.GUARD_MODE == "amplifier" or Constants.SHIELD_MODE == "amplifier"
 		then PassResolver.ringClass(defender, attacker.aim) == "guard"
 			and PassResolver.shielded(defender, attacker.aim)
 		else PassResolver.isSupershielded(defender)

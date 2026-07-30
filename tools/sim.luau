@@ -59,6 +59,9 @@ do
 				end
 			end
 			i += 2
+		elseif a == "--shield-mode" then
+			Constants.SHIELD_MODE = args[i + 1]
+			i += 2
 		elseif a == "--guard-mode" then
 			Constants.GUARD_MODE = args[i + 1]
 			i += 2
