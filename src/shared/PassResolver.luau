@@ -17,7 +17,16 @@ local Constants = require(script.Parent.Constants)
 
 local PassResolver = {}
 
-export type Direction = "in" | "out" | "up" | "down" | "neutral"
+export type Direction =
+	| "up"
+	| "up-in"
+	| "in"
+	| "down-in"
+	| "down"
+	| "down-out"
+	| "out"
+	| "up-out"
+	| "neutral"
 
 -- blocked — the strike met the Shield or the Guard (clean if the defender supershielded, thin otherwise)
 -- normal  — an uncontested strike

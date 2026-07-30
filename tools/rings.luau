@@ -1,5 +1,5 @@
 --!strict
--- rings.luau — sweep every possible ring over the four directions. Run from the repo root:
+-- rings.luau — sweep or solve rings over the wheel's notches. Run from the repo root:
 --     lune run tools/rings.luau [--top N] [--all] [--ring CODE]
 --
 -- A RING is the defender's map: what happens at each quarter-turn offset from their own aim.
@@ -30,7 +30,7 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 
 -- ---- args --------------------------------------------------------------------------------------
 local topN, showAll, onlyRing = 12, false, nil :: string?
-local notches, anchored, contiguous = 4, false, false
+local notches, anchored, contiguous = #Constants.CYCLE, false, false
 local guardOpposite = false
 local dumpMix = false
 local sortKey = "read"
@@ -101,9 +101,9 @@ do
 	end
 end
 
--- A ring with more notches than four needs more direction names. The shipped four keep their
--- self-relative names; anything else is generated, since only the tool ever sees them.
-if notches ~= 4 then
+-- A ring of a different size than the shipped cycle needs its own direction names; they are
+-- generated, since only the tool ever sees them.
+if notches ~= #Constants.CYCLE then
 	local cycle = {}
 	for i = 1, notches do
 		cycle[i] = "n" .. tostring(i - 1)
@@ -179,9 +179,9 @@ local function mirrorCode(code: string): string
 	return s
 end
 
--- The full space is 3^notches, which is only worth enumerating at four. Larger rings are examined
--- one at a time via --ring, since the interesting eight-notch rings are all doublings of a
--- four-notch one rather than arbitrary colourings.
+-- The full space is 3^notches, which is only worth enumerating exhaustively at four (--notches 4).
+-- Larger rings are examined one at a time via --ring, or as contiguous-wedge families via
+-- --contiguous — the shapes you could actually paint on a shield.
 local RINGS: { { [number]: string } } = {}
 if notches == 4 then
 	local seen: { [string]: boolean } = {}

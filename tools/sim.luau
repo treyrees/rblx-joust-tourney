@@ -25,12 +25,14 @@ local PR = roblox.requireShared("PassResolver")
 
 local D = Constants.DIRECTIONS
 -- The playable directions, filled in after the arguments are read because --notches can replace the
--- cycle. Four is what ships (invariant 4); a larger cycle exists only so the instrument can price it.
+-- cycle. The shipped wheel is the eight-notch cycle of ADR 0006; other sizes exist so the instrument
+-- can price them. (The name FOUR predates the eight-notch decision and means "the committed, non-
+-- neutral directions".)
 local FOUR: { string } = {}
 local MAX_PASSES = 30 -- a match this long is a convergence failure, and is reported as one
 
 -- ---- args --------------------------------------------------------------------------------------
--- 8000 matches per pairing over 55 pairings is ~440k matches: ample for verdicts whose thresholds
+-- 8000 matches per pairing over 66 pairings is ~530k matches: ample for verdicts whose thresholds
 -- are coarse (a 3-5 pass band, a 75% read edge, a 50% long-shot share, a rank). The default was
 -- 20000, chosen when the round robin was 36 pairings and the oracle searched four aims instead of
 -- every aim-and-shield pair; at that size the gate had grown to over two minutes. Pass --matches for
@@ -51,8 +53,8 @@ do
 			Constants.PRORATION.CURVE = args[i + 1]
 			i += 2
 		elseif a == "--notches" then
-			local n = tonumber(args[i + 1]) or 4
-			if n ~= 4 then
+			local n = tonumber(args[i + 1]) or #Constants.CYCLE
+			if n ~= #Constants.CYCLE then
 				local cycle = {}
 				for k = 1, n do
 					cycle[k] = "n" .. tostring(k - 1)
@@ -95,9 +97,9 @@ do
 			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
 			i += 2
 		elseif a == "--ring" then
-			-- Four letters, one per quarter-turn offset from the defender's own aim: C=crit G=guard
-			-- N=normal. Lets a candidate ring from tools/rings.luau be played out over real matches
-			-- rather than only solved in one shot.
+			-- One letter per notch offset from the defender's own aim: C=crit G=guard N=normal. Lets a
+			-- candidate ring from tools/rings.luau be played out over real matches rather than only
+			-- solved in one shot.
 			local FROM = { C = "crit", G = "guard", N = "normal" }
 			local code = args[i + 1]
 			-- One letter per notch. Bounded by the code's own length, not by four: hardcoding four
