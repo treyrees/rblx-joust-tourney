@@ -202,6 +202,34 @@ Constants.PRORATION = {
 	MAX_BONUS = 0.35,
 }
 
+-- The wheel input's FEEL (invariant 4: animation may be smooth, the televised state is always the
+-- discrete notch). Client-side only — the server never sees anything but the quantized notch — so
+-- none of these numbers touch the combat model. Tuned by hand in the browser feel rig
+-- (prototypes/ring-feel.html); this is its "Magnet" preset: easy to steer, takes a little attention
+-- to confirm the notch you want. Units: angle in notches (1.0 = 45 degrees), time in seconds.
+Constants.WHEEL = {
+	-- While the finger is down, the needle is biased toward the nearest notch by this fraction:
+	-- 0 is a free glide, 1 is a fully quantized click-wheel.
+	DETENT = 0.45,
+	-- On release the needle beds into the nearest notch under a per-notch spring potential
+	-- (torque = -STIFFNESS * sin(2*pi*theta) / 2*pi) with viscous damping.
+	STIFFNESS = 180,
+	DAMPING = 14, -- applied while settling into a notch
+	FRICTION = 3, -- applied instead of DAMPING while spinning from a flick
+	-- Release speeds below FLICK_MIN (notches/second) snap straight back instead of spinning; the
+	-- release speed itself is the median over the last FLICK_WINDOW seconds of drag.
+	FLICK_MIN = 0.6,
+	FLICK_WINDOW = 0.09,
+	-- Above SPIN_OMEGA the wheel is "spinning" (FRICTION governs); below it, "settling" (DAMPING).
+	SPIN_OMEGA = 0.5,
+	-- Close enough to call it landed: the needle clamps exactly onto the notch.
+	SETTLE_OMEGA = 0.02,
+	SETTLE_DIST = 0.002,
+	-- Integration guards: clamp a hitchy frame, sub-step so high stiffness stays stable.
+	MAX_DT = 0.032,
+	SUBSTEP = 0.004,
+}
+
 -- The Balance meter and the teeter roll (GAME_SPEC §4). Anyone hit this pass rolls against their
 -- Balance *after* damage to stay mounted — at 80 Balance, 80% stay-on. Public, and printed on screen
 -- before the roll (CLAUDE.md invariant 6).
