@@ -24,11 +24,20 @@ local Constants = roblox.requireShared("Constants")
 local PR = roblox.requireShared("PassResolver")
 
 local D = Constants.DIRECTIONS
-local FOUR = { D.IN, D.OUT, D.UP, D.DOWN }
+-- The playable directions, filled in after the arguments are read because --notches can replace the
+-- cycle. The shipped wheel is the eight-notch cycle of ADR 0006; other sizes exist so the instrument
+-- can price them. (The name FOUR predates the eight-notch decision and means "the committed, non-
+-- neutral directions".)
+local FOUR: { string } = {}
 local MAX_PASSES = 30 -- a match this long is a convergence failure, and is reported as one
 
 -- ---- args --------------------------------------------------------------------------------------
-local matches, seed = 20000, 20260729
+-- 8000 matches per pairing over 66 pairings is ~530k matches: ample for verdicts whose thresholds
+-- are coarse (a 3-5 pass band, a 75% read edge, a 50% long-shot share, a rank). The default was
+-- 20000, chosen when the round robin was 36 pairings and the oracle searched four aims instead of
+-- every aim-and-shield pair; at that size the gate had grown to over two minutes. Pass --matches for
+-- a tighter run when pinning a number.
+local matches, seed = 8000, 20260729
 do
 	local args = process.args
 	local i = 1
@@ -43,10 +52,80 @@ do
 		elseif a == "--curve" then
 			Constants.PRORATION.CURVE = args[i + 1]
 			i += 2
+		elseif a == "--notches" then
+			local n = tonumber(args[i + 1]) or #Constants.CYCLE
+			if n ~= #Constants.CYCLE then
+				local cycle = {}
+				for k = 1, n do
+					cycle[k] = "n" .. tostring(k - 1)
+				end
+				Constants.CYCLE = cycle
+				Constants.RING = {}
+				for k = 0, n - 1 do
+					Constants.RING[k] = "normal"
+				end
+			end
+			i += 2
+		elseif a == "--breaking" then
+			Constants.BREAK.ENABLED = true
+			i += 1
+		elseif a == "--ss-hold" then
+			Constants.SUPERSHIELD_MIN_HOLD = tonumber(args[i + 1]) or 0
+			i += 2
+		elseif a == "--mortal" then
+			Constants.BREAK.MORTAL = true
+			i += 1
+		elseif a == "--swap" then
+			Constants.BREAK.TRIGGER = "proration"
+			i += 1
+		elseif a == "--break-momentum" then
+			Constants.BREAK.MOMENTUM_THRESHOLD = tonumber(args[i + 1]) or 0.6
+			i += 2
+		elseif a == "--ss-restore" then
+			Constants.MATRIX.SUPERSHIELD_RESTORE = tonumber(args[i + 1]) or 2
+			i += 2
+		elseif a == "--ss-bonus" then
+			Constants.MATRIX.SUPERSHIELD_STRIKE_BONUS = tonumber(args[i + 1]) or 0
+			i += 2
+		elseif a == "--shield-mode" then
+			Constants.SHIELD_MODE = args[i + 1]
+			i += 2
+		elseif a == "--guard-mode" then
+			Constants.GUARD_MODE = args[i + 1]
+			i += 2
+		elseif a == "--shield-band" then
+			Constants.SHIELD_BAND = tonumber(args[i + 1]) or 1
+			i += 2
+		elseif a == "--ring" then
+			-- One letter per notch offset from the defender's own aim: C=crit G=guard N=normal. Lets a
+			-- candidate ring from tools/rings.luau be played out over real matches rather than only
+			-- solved in one shot.
+			local FROM = { C = "crit", G = "guard", N = "normal" }
+			local code = args[i + 1]
+			-- One letter per notch. Bounded by the code's own length, not by four: hardcoding four
+			-- here silently truncated every larger ring and left its tail as "normal".
+			if #code ~= #Constants.CYCLE then
+				error(string.format(
+					"--ring %q has %d letters but the cycle has %d notches (pass --notches first)",
+					code, #code, #Constants.CYCLE))
+			end
+			for k = 0, #code - 1 do
+				local cls = FROM[code:sub(k + 1, k + 1):upper()]
+				if not cls then
+					error("bad --ring code: " .. tostring(code))
+				end
+				Constants.RING[k] = cls
+			end
+			i += 2
 		else
 			i += 1
 		end
 	end
+end
+
+-- The cycle is settled now, so the playable direction list can be built.
+for _, dir in Constants.CYCLE do
+	table.insert(FOUR, dir)
 end
 
 -- ---- deterministic RNG -------------------------------------------------------------------------
@@ -86,6 +165,17 @@ type Strategy = {
 	commit: (Ctx) -> any,
 }
 
+-- Ring-relative helpers. The three shapes GAME_SPEC §3 names — depth, breadth, split — are defined
+-- against whatever Constants.RING currently says, not against the assumption that the Guard is
+-- opposite and the Crit is your own aim. That assumption is exactly what tools/rings.luau is testing.
+local function guardOf(aim: string): string
+	return PR.guards({ shield = D.NEUTRAL, aim = aim, holdFraction = 1 })[1] or pick(FOUR)
+end
+
+local function critOf(aim: string): string
+	return PR.crits({ shield = D.NEUTRAL, aim = aim, holdFraction = 1 })[1] or pick(FOUR)
+end
+
 local function mostFrequent(list: { string }): string?
 	if #list == 0 then
 		return nil
@@ -116,20 +206,22 @@ local STRATEGIES: { Strategy } = {
 			return { shield = pick(FOUR), aim = D.NEUTRAL, holdFraction = 1 }
 		end,
 	},
-	-- Always supershields: maximum depth, but its own Aim direction is left as an open Crit.
+	-- Always supershields: Shield stacked on a direction the Aim already guards. Maximum depth, and
+	-- it leaves whatever the ring exposes wide open.
 	{
 		name = "supershield",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { shield = Constants.OPPOSITE[aim], aim = aim, holdFraction = 1 }
+			return { shield = guardOf(aim), aim = aim, holdFraction = 1 }
 		end,
 	},
-	-- Always covers its own Crit with the Shield. The safe, bonus-less shape.
+	-- Always plugs its own Crit with the Shield. The safe, bonus-less shape — and under today's ring
+	-- the one that beats even the oracle, which is what put the ring itself under suspicion.
 	{
 		name = "axis",
 		commit = function(_ctx)
 			local aim = pick(FOUR)
-			return { shield = aim, aim = aim, holdFraction = 1 }
+			return { shield = critOf(aim), aim = aim, holdFraction = 1 }
 		end,
 	},
 	-- Commits early and never flinches: full honesty bonus, fully readable.
@@ -155,14 +247,44 @@ local STRATEGIES: { Strategy } = {
 			return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 0.5 }
 		end,
 	},
+	-- Spends the run-up spurring instead of holding: no honesty bonus at all, but enough momentum to
+	-- break a slice on anything that lands. The pure "later" line.
+	{
+		name = "spurrer",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0, momentum = 1 }
+		end,
+	},
+	-- Splits the run-up: half the honesty bonus, and just enough momentum to break.
+	{
+		name = "splitter",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0.4, momentum = 0.6 }
+		end,
+	},
+	-- The double-dip the design has to answer for: spurs the entire run-up for full momentum, then
+	-- snaps into the aim whose Guard lands on its pre-placed Shield at the tick. Under the shipped
+	-- rule that buys breaking AND a free Supershield, paying only the damage multiplier. This is the
+	-- strategy Constants.SUPERSHIELD_MIN_HOLD exists to price.
+	{
+		name = "opportunist",
+		commit = function(_ctx)
+			local aim = pick(FOUR)
+			return { shield = guardOf(aim), aim = aim, holdFraction = 0, momentum = 1 }
+		end,
+	},
 	-- Plays the read: strikes where the opponent's habits say their Crit will be, and guards the
 	-- direction they most often strike. This is the realistic skilled player.
 	{
 		name = "counter",
 		commit = function(ctx)
 			local theirAim = mostFrequent(ctx.oppAims)
-			local aim = if theirAim and theirAim ~= D.NEUTRAL then theirAim else pick(FOUR)
-			return { shield = aim, aim = aim, holdFraction = 0.9 }
+			-- Strike where their habitual aim leaves them exposed, which under a general ring is not
+			-- necessarily the direction they are aiming.
+			local aim = if theirAim and theirAim ~= D.NEUTRAL then critOf(theirAim) else pick(FOUR)
+			return { shield = critOf(aim), aim = aim, holdFraction = 0.9 }
 		end,
 	},
 	-- The ceiling, not a player: sees the opponent's commitment and picks the best aim against it.
@@ -175,15 +297,21 @@ local STRATEGIES: { Strategy } = {
 			if not opp then
 				return { shield = pick(FOUR), aim = pick(FOUR), holdFraction = 1 }
 			end
-			local bestAim, bestDmg = FOUR[1], -1
+			-- A true best response: search BOTH inputs and score on net Balance, not on damage dealt.
+			-- Scoring the strike alone made the oracle walk into crits under rings where the aim
+			-- carries most of the exposure, which understated those rings rather than the oracle.
+			local best, bestNet = nil, -math.huge
 			for _, aim in FOUR do
-				local dmg = PR.strikeDamage({ shield = D.IN, aim = aim, holdFraction = 1 }, opp)
-				if dmg > bestDmg then
-					bestAim, bestDmg = aim, dmg
+				for _, shield in FOUR do
+					local me = { shield = shield, aim = aim, holdFraction = 1 }
+					local dealt = PR.strikeDamage(me, opp)
+					local taken = PR.strikeDamage(opp, me)
+					if dealt - taken > bestNet then
+						best, bestNet = me, dealt - taken
+					end
 				end
 			end
-			-- Cover the Crit its own Aim opens, since it cannot read the opponent's Aim in return.
-			return { shield = bestAim, aim = bestAim, holdFraction = 1 }
+			return best
 		end,
 	},
 }
@@ -201,25 +329,35 @@ type Tally = {
 	unhorses: number,
 	totalUnhorseBalance: number,
 	longShotFalls: number,
+	-- Where on the meter riders actually go down. "Bring the number to zero" is the natural way to
+	-- describe a health bar, and it is not what this meter does: a rider rolls against Balance every
+	-- time they are hit, so most matches end long before the bar empties. This histogram is how much
+	-- of the bar is real.
+	fallBuckets: { number },
+	breaks: number,
 }
 
 local LONG_SHOT_ODDS = 0.8 -- a fall at ≥80% stay-on odds is the dice overruling the meter
 
 local function newTally(): Tally
 	return {
-		tiers = { blocked = 0, normal = 0, crit = 0, weak = 0 },
+		tiers = { blocked = 0, normal = 0, crit = 0, weak = 0, mortal = 0 },
 		passes = 0,
 		totalPasses = 0,
 		timeouts = 0,
 		unhorses = 0,
 		totalUnhorseBalance = 0,
 		longShotFalls = 0,
+		fallBuckets = table.create(10, 0),
+		breaks = 0,
 	}
 end
 
 local function recordFall(tally: Tally, out: any)
 	tally.unhorses += 1
 	tally.totalUnhorseBalance += out.balanceAfter
+	local b = math.clamp(math.floor(out.balanceAfter / 10) + 1, 1, 10)
+	tally.fallBuckets[b] += 1
 	if (out.stayChance or 0) >= LONG_SHOT_ODDS then
 		tally.longShotFalls += 1
 	end
@@ -228,6 +366,10 @@ end
 -- Returns 1 if A won, -1 if B won, 0 for a double-unhorse or a timeout.
 local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 	local balA, balB = Constants.BALANCE.START, Constants.BALANCE.START
+	-- Breaks persist for the whole match and are keyed to absolute directions, so they do not rotate
+	-- with the rider who took them.
+	local brokenA: { [string]: number } = {}
+	local brokenB: { [string]: number } = {}
 	local ctxA: Ctx = { selfBalance = balA, oppBalance = balB, oppAims = {}, oppShields = {} }
 	local ctxB: Ctx = { selfBalance = balB, oppBalance = balA, oppAims = {}, oppShields = {} }
 
@@ -249,7 +391,16 @@ local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 			commitB = sb.commit(ctxB)
 		end
 
+		commitA.broken, commitB.broken = brokenA, brokenB
 		local res = PR.resolve(commitA, commitB, { balance = balA }, { balance = balB }, rng)
+		if res.a.brokenDirection then
+			brokenA[res.a.brokenDirection] = (brokenA[res.a.brokenDirection] or 0) + 1
+			tally.breaks += 1
+		end
+		if res.b.brokenDirection then
+			brokenB[res.b.brokenDirection] = (brokenB[res.b.brokenDirection] or 0) + 1
+			tally.breaks += 1
+		end
 		tally.tiers[res.a.tier] += 1
 		tally.tiers[res.b.tier] += 1
 		balA, balB = res.a.balanceAfter, res.b.balanceAfter
@@ -282,7 +433,19 @@ local function playMatch(sa: Strategy, sb: Strategy, tally: Tally): number
 end
 
 -- ---- run ---------------------------------------------------------------------------------------
-print(string.format("sim — %d matches per pairing, seed %d, curve %s", matches, seed, Constants.PRORATION.CURVE))
+local ringCode = ""
+for i = 0, #Constants.CYCLE - 1 do
+	ringCode ..= ({ crit = "C", guard = "G", normal = "N" })[Constants.RING[i]]
+end
+print(string.format(
+	"sim — %d matches per pairing, seed %d, curve %s, ring %s (%d notches), shield band %d",
+	matches,
+	seed,
+	Constants.PRORATION.CURVE,
+	ringCode,
+	#Constants.CYCLE,
+	Constants.SHIELD_BAND
+))
 print(string.format(
 	"matrix: normal %.1f  crit %.1f  weak %.1f  thin-block x%.2f  restore %.1f  max-bonus %.2f",
 	Constants.MATRIX.NORMAL_DAMAGE,
@@ -325,7 +488,7 @@ for _, n in tally.tiers do
 	totalStrikes += n
 end
 print("tier distribution across every strike")
-for _, t in { "blocked", "normal", "crit", "weak" } do
+for _, t in { "blocked", "normal", "crit", "weak", "mortal" } do
 	print(string.format("  %-9s %6.2f%%", t, 100 * tally.tiers[t] / totalStrikes))
 end
 print("")
@@ -336,6 +499,18 @@ local meanFallBalance = tally.totalUnhorseBalance / tally.unhorses
 local longShotRate = tally.longShotFalls / tally.unhorses
 print(string.format("convergence: %.2f passes per match on average (%d matches, %d hit the %d-pass cap)",
 	meanPasses, tally.passes, tally.timeouts, MAX_PASSES))
+if Constants.BREAK.ENABLED then
+	print(string.format("breaking: %.2f slices broken per match (momentum threshold %.2f)",
+		tally.breaks / tally.passes, Constants.BREAK.MOMENTUM_THRESHOLD))
+	print("")
+end
+print("where riders actually go down (Balance at the moment of the fall)")
+for b = 10, 1, -1 do
+	local share = tally.fallBuckets[b] / tally.unhorses
+	print(string.format("  %3d-%3d  %5.1f%%  %s", (b - 1) * 10, b * 10 - 1, 100 * share,
+		string.rep("#", math.floor(share * 120))))
+end
+print("")
 print(string.format("attrition: riders fall at %.1f Balance on average; %.1f%% of falls came off a roll they were "
 	.. "%.0f%%+ favoured to make", meanFallBalance, 100 * longShotRate, 100 * LONG_SHOT_ODDS))
 print("")
@@ -397,6 +572,18 @@ if readEdge < 0.75 then
 	))
 end
 
+-- The ceiling is as load-bearing as the floor. During the ring investigation, several candidate
+-- rings passed every check below while a perfect reader beat random 97%+ of the time — information
+-- had become the whole game, and §4's "anyone can win any pass" was dead with all gates green.
+-- Healthy configurations measured 83-87%; the dominant ones 97-100%. The ceiling sits between.
+if readEdge > 0.93 then
+	table.insert(failures, string.format(
+		"read-dominance: a perfect read beats random %.1f%% of the time (want ≤93%%) — information has "
+			.. "swallowed the dice and anyone-can-win is dead (GAME_SPEC §4, CLAUDE.md invariant 7)",
+		100 * readEdge
+	))
+end
+
 if longShotRate > 0.5 then
 	table.insert(failures, string.format(
 		"slot-machine convergence: %.1f%% of falls came off rolls the rider was %.0f%%+ favoured to make "
@@ -422,7 +609,7 @@ print(string.format("read edge: a perfect read beats random %.1f%% of the time",
 print(string.format("camper ranks %d of %d", camperRank, #standing))
 print("")
 if #failures == 0 then
-	print("VERDICT: all three checks pass — these numbers are citable.")
+	print("VERDICT: all checks pass — these numbers are citable.")
 else
 	print("VERDICT: " .. tostring(#failures) .. " check(s) failed")
 	for _, f in failures do

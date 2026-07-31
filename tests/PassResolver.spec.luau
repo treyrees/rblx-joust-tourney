@@ -12,7 +12,10 @@ local Constants = roblox.requireShared("Constants")
 local PR = roblox.requireShared("PassResolver")
 
 local D = Constants.DIRECTIONS
+-- The four-direction basis the design speaks in (GAME_SPEC §3)...
 local FOUR = { D.IN, D.OUT, D.UP, D.DOWN }
+-- ...and the full eight-notch wheel it is played on (ADR 0006).
+local EIGHT = { D.UP, D.UP_IN, D.IN, D.DOWN_IN, D.DOWN, D.DOWN_OUT, D.OUT, D.UP_OUT }
 
 local function commit(shield, aim, holdFraction)
 	return { shield = shield, aim = aim, holdFraction = holdFraction or 0 }
@@ -29,11 +32,11 @@ local function fixedRng(v: number)
 	end
 end
 
--- Count the tiers the four real aims produce against one defender.
+-- Count the tiers every real aim produces against one defender.
 local function tierSpread(defender)
-	local spread = { blocked = 0, normal = 0, crit = 0, weak = 0 }
-	for _, aim in FOUR do
-		local t = PR.tier(commit(D.IN, aim, 1), defender)
+	local spread = { blocked = 0, normal = 0, crit = 0, weak = 0, mortal = 0 }
+	for _, aim in EIGHT do
+		local t = PR.tier(commit(D.DOWN, aim, 1), defender)
 		spread[t] += 1
 	end
 	return spread
@@ -61,35 +64,45 @@ kit.describe("PassResolver — polarization (GAME_SPEC §3)", function()
 		end
 	end)
 
-	kit.it("supershielding is Guard == Shield, and neutral never supershields", function()
-		-- Aiming OUT puts the Guard IN, so a Shield on IN is the supershield.
-		kit.expectEqual(PR.isSupershielded(commit(D.IN, D.OUT)), true, "aim out + shield in supershields")
-		kit.expectEqual(PR.isSupershielded(commit(D.UP, D.OUT)), false, "aim out + shield up does not")
-		kit.expectEqual(PR.isSupershielded(commit(D.NEUTRAL, D.NEUTRAL)), false, "neutral cannot supershield")
+	kit.it("supershielding is the Shield covering the Guard — held, and never from neutral", function()
+		-- Aiming OUT puts the Guard on IN; a Shield plate covering IN is the supershield.
+		kit.expectEqual(PR.isSupershielded(commit(D.IN, D.OUT, 1)), true, "aim out + shield on in supershields")
+		kit.expectEqual(PR.isSupershielded(commit(D.UP, D.OUT, 1)), false, "aim out + shield up does not")
+		kit.expectEqual(PR.isSupershielded(commit(D.NEUTRAL, D.NEUTRAL, 1)), false, "neutral cannot supershield")
+		-- Defence is prorated like offence (ADR 0009): the aligning aim must have been HELD, so a
+		-- last-instant flick into alignment collects nothing.
+		kit.expectEqual(
+			PR.isSupershielded(commit(D.IN, D.OUT, Constants.SUPERSHIELD_MIN_HOLD - 0.01)),
+			false,
+			"a flick into alignment earns no supershield"
+		)
 	end)
 end)
 
-kit.describe("PassResolver — the matrix, enumerated (GAME_SPEC §4)", function()
-	-- Defender aims OUT throughout, so their Guard is IN and their Crit is OUT.
-	kit.it("supershield: one clean block, one open Crit, two normals", function()
-		local spread = tierSpread(commit(D.IN, D.OUT))
-		kit.expectEqual(spread.blocked, 1, "blocked")
-		kit.expectEqual(spread.crit, 1, "crit")
-		kit.expectEqual(spread.normal, 2, "normal")
+kit.describe("PassResolver — the matrix, enumerated (GAME_SPEC §4, ring CCCNGNNN)", function()
+	-- Defender aims OUT throughout. On the shipped ring their exposure is {out, up-out, up} (the aim
+	-- and two notches sweeping on), their Guard is IN (directly opposite), and everything else is
+	-- ordinary. The Shield is a two-notch plate, so it covers two of the three exposed notches at
+	-- best: something is ALWAYS bare, and which one is the hole card (ADR 0006).
+	kit.it("deep (supershield): plate on the Guard — all three crit notches stay bare", function()
+		local spread = tierSpread(commit(D.IN, D.OUT, 1))
+		kit.expectEqual(spread.blocked, 2, "blocked")
+		kit.expectEqual(spread.crit, 3, "crit")
+		kit.expectEqual(spread.normal, 3, "normal")
 	end)
 
-	kit.it("axis: the Shield covers its own Crit — two thin blocks, no crit", function()
-		local spread = tierSpread(commit(D.OUT, D.OUT))
-		kit.expectEqual(spread.blocked, 2, "blocked")
-		kit.expectEqual(spread.crit, 0, "crit")
-		kit.expectEqual(spread.normal, 2, "normal")
+	kit.it("forward: plate on the aim — covers the near exposure, the far notch stays bare", function()
+		local spread = tierSpread(commit(D.OUT, D.OUT, 1))
+		kit.expectEqual(spread.blocked, 3, "blocked")
+		kit.expectEqual(spread.crit, 1, "crit")
+		kit.expectEqual(spread.normal, 4, "normal")
 	end)
 
-	kit.it("split: two thin blocks, but the Crit stays open", function()
-		local spread = tierSpread(commit(D.UP, D.OUT))
-		kit.expectEqual(spread.blocked, 2, "blocked")
+	kit.it("back: plate one notch on — covers the far exposure, the aim itself stays bare", function()
+		local spread = tierSpread(commit(D.UP_OUT, D.OUT, 1))
+		kit.expectEqual(spread.blocked, 3, "blocked")
 		kit.expectEqual(spread.crit, 1, "crit")
-		kit.expectEqual(spread.normal, 1, "normal")
+		kit.expectEqual(spread.normal, 4, "normal")
 	end)
 
 	kit.it("the Crit is always the defender's own Aim direction", function()
@@ -191,10 +204,11 @@ kit.describe("PassResolver — the CLAUDE.md invariants", function()
 	kit.it("invariant 1: a correct read beats the best-case honest normal", function()
 		-- A crit taken with NO honesty bonus must still exceed a normal hit landed with the
 		-- maximum bonus. If tuning ever inverts this, reading correctly stops paying.
-		local axis = commit(D.UP, D.UP)
-		local offAxis = commit(D.UP, D.IN) -- Crit open at IN
-		local crit = PR.strikeDamage(commit(D.IN, D.IN, 0), offAxis)
-		local bestNormal = PR.strikeDamage(commit(D.IN, D.IN, 1), axis)
+		-- Defender aims UP: exposure {up, up-in, in}, guard DOWN, normals include OUT. The Shield on
+		-- DOWN keeps every strike below uncovered by the plate.
+		local defender = commit(D.DOWN, D.UP, 1)
+		local crit = PR.strikeDamage(commit(D.IN, D.UP, 0), defender) -- into the bare aim, flicked
+		local bestNormal = PR.strikeDamage(commit(D.IN, D.OUT, 1), defender) -- ordinary notch, full hold
 		if crit <= bestNormal then
 			error(
 				"crit ("
@@ -244,6 +258,107 @@ kit.describe("PassResolver — the CLAUDE.md invariants", function()
 		kit.expectEqual(forward.a.damageTaken, reversed.b.damageTaken, "damage")
 		kit.expectEqual(forward.a.balanceAfter, reversed.b.balanceAfter, "balance")
 		kit.expectEqual(forward.a.unhorsed, reversed.b.unhorsed, "unhorsed")
+	end)
+end)
+
+kit.describe("PassResolver — the ring's structural invariants (ADR 0006, CLAUDE.md 9)", function()
+	-- These read Constants.RING generically, so they hold whatever ring ships — they pin the SHAPE
+	-- constraints the equilibrium gate (`tools/rings.luau --verify`) enforces numerically.
+	local n = #Constants.CYCLE
+
+	kit.it("the ring is chiral — some offset is a crit while its mirror is not", function()
+		local chiral = false
+		for off = 0, n - 1 do
+			if (Constants.RING[off] == "crit") ~= (Constants.RING[(n - off) % n] == "crit") then
+				chiral = true
+			end
+		end
+		if not chiral then
+			error("a mirror-symmetric ring can only trade crits; one-sided reads need chirality (ADR 0006)")
+		end
+	end)
+
+	kit.it("polarization: exactly one guard notch, directly opposite the aim", function()
+		local guards = {}
+		for off = 0, n - 1 do
+			if Constants.RING[off] == "guard" then
+				table.insert(guards, off)
+			end
+		end
+		kit.expectEqual(#guards, 1, "one guard notch")
+		kit.expectEqual(guards[1], n / 2, "directly opposite the aim")
+		-- And the derived helper agrees with the opposition table, which is what the copy promises.
+		for _, aim in FOUR do
+			kit.expectEqual(PR.guard(commit(D.IN, aim)), Constants.OPPOSITE[aim], "guard for aim " .. aim)
+		end
+	end)
+
+	kit.it("the exposure is wider than the Shield plate — something is always bare", function()
+		local crits = 0
+		for off = 0, n - 1 do
+			if Constants.RING[off] == "crit" then
+				crits += 1
+			end
+		end
+		if crits <= Constants.SHIELD_BAND then
+			error(string.format(
+				"%d crit notches vs a %d-notch plate: the Shield can cover everything, so the hole card "
+					.. "does not exist (ADR 0006 — the secret IS the gap in coverage)",
+				crits,
+				Constants.SHIELD_BAND
+			))
+		end
+	end)
+
+	kit.it("the aim itself is exposed — offset 0 is a crit notch", function()
+		kit.expectEqual(Constants.RING[0], "crit", "you are exposed exactly where you strike")
+	end)
+end)
+
+kit.describe("PassResolver — breaking and the mortal rung (ADR 0008)", function()
+	kit.it("a landed strike carrying full momentum breaks the direction it hit", function()
+		local res = PR.resolve(
+			{ shield = D.DOWN, aim = D.OUT, holdFraction = 0, momentum = 1 },
+			commit(D.DOWN, D.UP, 1), -- OUT is an ordinary notch for an UP-aiming defender, uncovered
+			state(100),
+			state(100),
+			fixedRng(0)
+		)
+		kit.expectEqual(res.b.brokenDirection, D.OUT, "the struck direction breaks")
+	end)
+
+	kit.it("below the momentum threshold, nothing breaks — proration does not break (ADR 0008)", function()
+		local res = PR.resolve(
+			{ shield = D.DOWN, aim = D.OUT, holdFraction = 1, momentum = 0 },
+			commit(D.DOWN, D.UP, 1),
+			state(100),
+			state(100),
+			fixedRng(0)
+		)
+		kit.expectEqual(res.b.brokenDirection, nil, "a full hold with no momentum breaks nothing")
+	end)
+
+	kit.it("a break demotes the slice one rung: this defender's Guard becomes an ordinary notch", function()
+		-- Defender aims UP, so their Guard is DOWN. With DOWN broken once, a strike there stops
+		-- being blocked. Breaks key off ABSOLUTE directions, so the map names the world notch.
+		local sound = commit(D.UP_OUT, D.UP, 1)
+		local broken = { shield = D.UP_OUT, aim = D.UP, holdFraction = 1, broken = { [D.DOWN] = 1 } }
+		kit.expectEqual(PR.tier(commit(D.DOWN, D.DOWN, 1), sound), "blocked", "sound guard blocks")
+		kit.expectEqual(PR.tier(commit(D.DOWN, D.DOWN, 1), broken), "normal", "broken guard does not")
+	end)
+
+	kit.it("the rung below crit is mortal: struck there uncovered, the rider goes down with NO roll", function()
+		-- Defender aims UP with their own aim notch broken once: crit demotes to mortal.
+		local res = PR.resolve(
+			commit(D.DOWN, D.UP, 1),
+			{ shield = D.DOWN, aim = D.UP, holdFraction = 1, broken = { [D.UP] = 1 } },
+			state(100),
+			state(100),
+			fixedRng(0) -- the luckiest possible roll, which must not save them
+		)
+		kit.expectEqual(res.b.tier, "mortal")
+		kit.expectEqual(res.b.unhorsed, true, "unhorsed regardless of the roll")
+		kit.expectEqual(res.b.roll, nil, "no roll is drawn at all — this end is a read, not dice")
 	end)
 end)
 

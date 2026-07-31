@@ -55,10 +55,19 @@ jobs:
       - name: Design lint
         run: lune run tools/design-lint.luau
 
-      # Not a third gate so much as the first one applied to the tuning numbers: the simulator
-      # exits non-zero if convergence leaves GAME_SPEC §4's 3-5 pass band, if reading stops beating
-      # random by a wide margin, if most falls start coming off near-certain rolls, or if
-      # neutral-camping climbs the table. Deterministic (fixed seed, LCG) and ~12s at full scale,
-      # so it runs at the same settings an ADR would cite rather than a reduced sample.
+      # Gate three, half one: the round robin. Exits non-zero if convergence leaves GAME_SPEC §4's
+      # 3-5 pass band, if reading stops beating random by a wide margin OR starts beating it so
+      # wide that information swallows the dice (both bounds of CLAUDE.md invariant 7), if most
+      # falls come off near-certain rolls, or if neutral-camping climbs the table. Deterministic
+      # (fixed seed, LCG), ~90s at full scale, run at the same settings an ADR would cite.
       - name: Pass simulator
         run: lune run tools/sim.luau
+
+      # Gate three, half two: the equilibrium solver on the shipped ring. Scripted riders cannot
+      # find an equilibrium exploit — a configuration once passed every simulator verdict while its
+      # equilibrium crit rate was 0.0% and its hole card was worth 0.01 Balance. This half enforces
+      # what only a solver can see: the hole card stays live (~1 bit, real Balance), crits fire
+      # between good players, no pure line dominates, and the ring stays chiral with its exposure
+      # wider than the Shield plate (CLAUDE.md invariants 8-9, ADR 0010). Runs in ~1s.
+      - name: Equilibrium verify
+        run: lune run tools/rings.luau --verify

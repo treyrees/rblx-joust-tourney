@@ -17,13 +17,22 @@ local Constants = require(script.Parent.Constants)
 
 local PassResolver = {}
 
-export type Direction = "in" | "out" | "up" | "down" | "neutral"
+export type Direction =
+	| "up"
+	| "up-in"
+	| "in"
+	| "down-in"
+	| "down"
+	| "down-out"
+	| "out"
+	| "up-out"
+	| "neutral"
 
 -- blocked — the strike met the Shield or the Guard (clean if the defender supershielded, thin otherwise)
 -- normal  — an uncontested strike
 -- crit    — struck in the Crit the defender's own Aim opened, and left uncovered
 -- weak    — a neutral-aim strike: chip damage, no crit potential, no honesty buff (§3 baseline 1)
-export type Tier = "blocked" | "normal" | "crit" | "weak"
+export type Tier = "blocked" | "normal" | "crit" | "weak" | "mortal"
 
 -- One rider's snapshotted commitment at the tick.
 --   shield       — chosen in intermission, hidden until impact (the hole card)
@@ -35,6 +44,11 @@ export type Commitment = {
 	shield: Direction,
 	aim: Direction,
 	holdFraction: number,
+	-- Momentum banked by spurring in neutral, 0-1. Competes with holdFraction for the same run-up
+	-- seconds: time spent spurring is time not spent holding an aim.
+	momentum: number?,
+	-- Absolute directions this rider has had BROKEN, and how many times. Persists across passes.
+	broken: { [Direction]: number }?,
 }
 
 -- A rider's meter state going into the pass. `recovery` is the horse's teeter bonus (GAME_SPEC §6);
@@ -46,6 +60,7 @@ export type RiderState = {
 
 export type RiderOutcome = {
 	tier: Tier, -- the tier of the strike this rider RECEIVED
+	brokenDirection: Direction?, -- a direction of THIS rider's ring broken by the strike they took
 	guard: Direction,
 	supershielded: boolean,
 	damageTaken: number,
@@ -73,27 +88,163 @@ function PassResolver.opposite(dir: Direction): Direction
 	return opp :: Direction
 end
 
--- Polarization (§3): the Guard is ALWAYS the opposite of the Aim, so one input carries attack and
--- defense together. A neutral aim yields no Guard at all (§3 neutral baseline 2) — maximally soft,
--- which is what prices cageyness.
+-- Position of each direction on Constants.CYCLE, so offsets can be taken in O(1). Rebuilt whenever
+-- the cycle is replaced, which `tools/rings.luau` does when it sweeps a ring of a different size.
+local CYCLE_INDEX: { [string]: number } = {}
+local cycleBuiltFor: any = nil
+
+local function index(): { [string]: number }
+	if cycleBuiltFor ~= Constants.CYCLE or #Constants.CYCLE ~= (CYCLE_INDEX._n or -1) then
+		CYCLE_INDEX = { _n = #Constants.CYCLE }
+		for i, dir in Constants.CYCLE do
+			CYCLE_INDEX[dir] = i - 1
+		end
+		cycleBuiltFor = Constants.CYCLE
+	end
+	return CYCLE_INDEX
+end
+
+-- How many notches the ring has. Four is the shipped input vocabulary (invariant 4); the resolver is
+-- written against #CYCLE so an eight-notch ring can be measured without a second code path.
+function PassResolver.notches(): number
+	return #Constants.CYCLE
+end
+
+-- Notches from `from` to `to` around the ring. Neutral has no position, so it has no offset either —
+-- callers must handle it before asking.
+function PassResolver.offset(from: Direction, to: Direction): number?
+	local idx = index()
+	local a, b = idx[from], idx[to]
+	if a == nil or b == nil then
+		return nil
+	end
+	return (b - a) % PassResolver.notches()
+end
+
+-- Where the rider's aim sits on their own ring. Zero means the ring is rigidly anchored to the aim,
+-- which is the shipped behaviour. A ring with more than one crit notch can instead let the rider
+-- choose WHICH of its exposed notches their aim occupies — the same threat with the vulnerability
+-- laid out differently around it — and that choice is this field.
+local function anchorOf(c: Commitment): number
+	return (c :: any).anchor or 0
+end
+
+-- What the defender's ring says about a strike arriving from direction `aim`: "crit", "guard",
+-- "normal", or nil when the defender is aiming neutral and therefore has no ring at all (§3 neutral
+-- baseline 2 — maximally soft, which is what prices cageyness).
+function PassResolver.ringClass(defender: Commitment, aim: Direction): string?
+	local off = PassResolver.offset(defender.aim, aim)
+	if off == nil then
+		return nil
+	end
+	local class = Constants.RING[(off + anchorOf(defender)) % PassResolver.notches()]
+	-- Degrade the slice by however many times this absolute direction has been broken.
+	local steps = if Constants.BREAK.ENABLED then ((defender.broken or {})[aim] or 0) else 0
+	for _ = 1, steps do
+		if class == "guard" then
+			class = "normal"
+		elseif class == "normal" then
+			class = "crit"
+		elseif class == "crit" and Constants.BREAK.MORTAL then
+			class = "mortal"
+		end
+	end
+	return class
+end
+
+-- Does this strike break the direction it landed on? Slice-agnostic by design: it asks only how much
+-- buildup the attacker carried, never what the slice was.
+function PassResolver.breaks(attacker: Commitment, tier: Tier): boolean
+	if not Constants.BREAK.ENABLED then
+		return false
+	end
+	if tier == "weak" then
+		return false
+	end
+	if tier == "blocked" and not Constants.BREAK.BLOCKED_BREAKS then
+		return false
+	end
+	local fuel = if Constants.BREAK.TRIGGER == "proration"
+		then attacker.holdFraction
+		else (attacker.momentum or 0)
+	return fuel >= Constants.BREAK.MOMENTUM_THRESHOLD
+end
+
+-- Every direction whose ring class is `class`, in ring order. Shared by `guards` and `crits`.
+local function directionsOfClass(commitment: Commitment, class: string): { Direction }
+	local out: { Direction } = {}
+	if commitment.aim == Constants.DIRECTIONS.NEUTRAL then
+		return out
+	end
+	local n = PassResolver.notches()
+	local base = index()[commitment.aim]
+	local anchor = anchorOf(commitment)
+	for off = 0, n - 1 do
+		if Constants.RING[(off + anchor) % n] == class then
+			table.insert(out, Constants.CYCLE[((base + off) % n) + 1] :: Direction)
+		end
+	end
+	return out
+end
+
+-- The directions this rider's aim defends. Polarization (§3) still holds in the default ring, where
+-- the single guard sits at offset 2 and is therefore the opposite of the aim — one input carrying
+-- attack and defense together. A ring may declare zero, one, or two guard offsets.
+function PassResolver.guards(commitment: Commitment): { Direction }
+	return directionsOfClass(commitment, "guard")
+end
+
+-- The single guard direction, for display and for the outcome record. Under the default ring this is
+-- exactly `opposite(aim)`, which is what every piece of player-facing copy says.
 function PassResolver.guard(commitment: Commitment): Direction
-	return PassResolver.opposite(commitment.aim)
+	return PassResolver.guards(commitment)[1] or Constants.DIRECTIONS.NEUTRAL
 end
 
--- The Crit direction: opposite the Guard, and therefore — by polarization — identically the rider's
--- own Aim. It is named separately from `aim` because the two are the same direction read for opposite
--- purposes: `aim` is where this rider threatens, `crit` is where this rider is exposed. Every piece of
--- player-facing copy about being hit points here, so the concept earns a name even though the body of
--- the function is a tautology.
+-- The directions where this rider is exposed. Under the default ring there is exactly one and it is
+-- identically the rider's own aim, which is where "you are exposed exactly where you strike" comes
+-- from. A chiral ring moves it off the aim, and that is the whole point of sweeping the space.
+function PassResolver.crits(commitment: Commitment): { Direction }
+	return directionsOfClass(commitment, "crit")
+end
+
 function PassResolver.crit(commitment: Commitment): Direction
-	return commitment.aim
+	return PassResolver.crits(commitment)[1] or Constants.DIRECTIONS.NEUTRAL
 end
 
--- Supershielding (§3): the binary defensive bonus, awarded iff the Guard lands on the Shield at the
--- tick. Neutral never supershields — there is nothing to guard over.
+-- Supershielding (§3): the binary defensive bonus, awarded iff the Shield is sitting on one of the
+-- ring's guard offsets — depth on a direction the aim already defends, rather than breadth across
+-- two. Neutral never supershields; there is no ring to be deep on.
+-- Does the defender's Shield cover a strike arriving from `aim`? The Shield covers SHIELD_BAND
+-- notches starting at the notch it occupies.
+function PassResolver.shielded(defender: Commitment, aim: Direction): boolean
+	if defender.shield == Constants.DIRECTIONS.NEUTRAL then
+		return false
+	end
+	local off = PassResolver.offset(defender.shield, aim)
+	return off ~= nil and off < Constants.SHIELD_BAND
+end
+
 function PassResolver.isSupershielded(commitment: Commitment): boolean
-	local guard = PassResolver.guard(commitment)
-	return guard ~= Constants.DIRECTIONS.NEUTRAL and guard == commitment.shield
+	if commitment.shield == Constants.DIRECTIONS.NEUTRAL then
+		return false
+	end
+	-- Defence, like offence, may have to be held rather than merely arrived at.
+	if commitment.holdFraction < Constants.SUPERSHIELD_MIN_HOLD then
+		return false
+	end
+	-- Depth: the Shield stacked onto a direction the aim already guards. With a band wider than one
+	-- notch it is enough that any covered notch is a guard notch.
+	for off = 0, Constants.SHIELD_BAND - 1 do
+		local idx = index()[commitment.shield]
+		if idx == nil then
+			return false
+		end
+		local dir = Constants.CYCLE[((idx + off) % PassResolver.notches()) + 1]
+		if PassResolver.ringClass(commitment, dir :: Direction) == "guard" then
+			return true
+		end
+	end
+	return false
 end
 
 -- ---- proration ---------------------------------------------------------------------------------
@@ -142,14 +293,18 @@ function PassResolver.tier(attacker: Commitment, defender: Commitment): Tier
 		return "weak"
 	end
 
-	local guard = PassResolver.guard(defender)
-	local covered = (guard ~= NEUTRAL and attacker.aim == guard)
-		or (defender.shield ~= NEUTRAL and attacker.aim == defender.shield)
-	if covered then
+	local class = PassResolver.ringClass(defender, attacker.aim)
+	local guardBlocks = Constants.GUARD_MODE ~= "amplifier"
+	-- An amplifier Shield contributes no coverage of its own; it only upgrades a Guard notch.
+	local shieldBlocks = Constants.SHIELD_MODE ~= "amplifier"
+		and PassResolver.shielded(defender, attacker.aim)
+	if (class == "guard" and guardBlocks) or shieldBlocks then
 		return "blocked"
 	end
-
-	if guard ~= NEUTRAL and attacker.aim == PassResolver.crit(defender) then
+	if class == "mortal" then
+		return "mortal"
+	end
+	if class == "crit" then
 		return "crit"
 	end
 	return "normal"
@@ -167,6 +322,9 @@ function PassResolver.baseDamage(tier: Tier, defenderSupershielded: boolean): nu
 		return M.CRIT_DAMAGE
 	elseif tier == "weak" then
 		return M.WEAK_DAMAGE
+	elseif tier == "mortal" then
+		-- The damage is beside the point; `resolve` unhorses on this tier without a roll.
+		return M.CRIT_DAMAGE
 	end
 	error("PassResolver.baseDamage: unknown tier: " .. tostring(tier))
 end
@@ -175,11 +333,27 @@ end
 -- A weak (neutral) strike takes no bonus at all — §3 baseline 1's "zero honesty buff".
 function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): (number, Tier)
 	local tier = PassResolver.tier(attacker, defender)
-	local base = PassResolver.baseDamage(tier, PassResolver.isSupershielded(defender))
+	-- A block is clean when the Shield and a Guard notch coincide AT THE STRUCK NOTCH. Under the
+	-- shipped "block" mode the defender-wide test is equivalent, since the Shield-on-Guard notch is
+	-- the only one that can be struck cleanly; under "amplifier" it is not, so ask per strike.
+	local clean = if Constants.GUARD_MODE == "amplifier" or Constants.SHIELD_MODE == "amplifier"
+		then PassResolver.ringClass(defender, attacker.aim) == "guard"
+			and PassResolver.shielded(defender, attacker.aim)
+		else PassResolver.isSupershielded(defender)
+	local base = PassResolver.baseDamage(tier, clean)
 	if base == 0 or tier == "weak" then
 		return base, tier
 	end
-	local bonus = Constants.PRORATION.MAX_BONUS * PassResolver.proration(attacker.holdFraction)
+	-- Whichever currency is NOT breaking slices is the one that multiplies damage.
+	local fuel = if Constants.BREAK.ENABLED and Constants.BREAK.TRIGGER == "proration"
+		then (attacker.momentum or 0)
+		else attacker.holdFraction
+	local bonus = Constants.PRORATION.MAX_BONUS * PassResolver.proration(fuel)
+	-- The Supershield pays offence too (ADR 0005): flat, additive with proration, and earned by the
+	-- ATTACKER's own defensive shape rather than by anything about this strike.
+	if PassResolver.isSupershielded(attacker) then
+		bonus += Constants.MATRIX.SUPERSHIELD_STRIKE_BONUS
+	end
 	return base * (1 + bonus), tier
 end
 
@@ -230,6 +404,7 @@ function PassResolver.resolve(
 		restore = restoreA,
 		balanceBefore = stateA.balance,
 		balanceAfter = afterA,
+		brokenDirection = if PassResolver.breaks(commitB, tierA) then commitB.aim else nil,
 		unhorsed = false,
 	}
 	local outB: RiderOutcome = {
@@ -240,16 +415,21 @@ function PassResolver.resolve(
 		restore = restoreB,
 		balanceBefore = stateB.balance,
 		balanceAfter = afterB,
+		brokenDirection = if PassResolver.breaks(commitA, tierB) then commitA.aim else nil,
 		unhorsed = false,
 	}
 
 	-- Rolls are drawn A-then-B for reproducibility under a seeded rng. Order cannot bias the
 	-- OUTCOME (each rider rolls against their own meter, and neither roll feeds the other), only the
 	-- sequence in which the two draws are consumed.
-	if damageToA > 0 then
+	if tierA == "mortal" then
+		outA.unhorsed, outA.stayChance = true, 0
+	elseif damageToA > 0 then
 		outA.stayChance, outA.roll, outA.unhorsed = teeter(afterA, stateA.recovery or 0, rng)
 	end
-	if damageToB > 0 then
+	if tierB == "mortal" then
+		outB.unhorsed, outB.stayChance = true, 0
+	elseif damageToB > 0 then
 		outB.stayChance, outB.roll, outB.unhorsed = teeter(afterB, stateB.recovery or 0, rng)
 	end
 
