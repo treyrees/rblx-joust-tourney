@@ -1,0 +1,385 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ring Feel — spin the wheel</title>
+<style>
+  /* Committed single-theme: a night-tilt arena screen. This is a game input surface,
+     not a document — the dark ground is the choice, not an omission. */
+  :root {
+    --ground: #17130d;
+    --ground-2: #201a11;
+    --line: #3a3226;
+    --text: #e9dfc9;
+    --text-dim: #9a8d72;
+    --gold: #d9a441;      /* the aim — the one loud thing on the page */
+    --exposure: #b8452f;  /* C notches */
+    --guard: #6f94a9;     /* G notch */
+    --ok: #7fa06a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: radial-gradient(120vmax 120vmax at 50% 30%, var(--ground-2), var(--ground) 60%);
+    color: var(--text);
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px 16px 48px;
+    -webkit-user-select: none; user-select: none;
+    touch-action: pan-y;
+  }
+  header { text-align: center; margin-bottom: 4px; }
+  header h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-variant: small-caps; letter-spacing: 0.08em;
+    font-size: 1.15rem; font-weight: 600; margin: 0;
+    color: var(--text-dim);
+  }
+  /* The televised state: discrete, big, and separate from the smooth needle. */
+  #televised {
+    font-family: Georgia, serif; font-variant: small-caps;
+    font-size: clamp(1.8rem, 7vw, 2.6rem); line-height: 1.1;
+    letter-spacing: 0.06em; color: var(--gold);
+    min-height: 1.2em; text-align: center; margin: 2px 0 6px;
+    transition: transform 80ms ease-out;
+  }
+  #televised.neutral { color: var(--text-dim); }
+  #televised.tick { transform: scale(1.06); }
+  #wheelwrap { position: relative; width: min(88vw, 420px); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  .hint { color: var(--text-dim); font-size: 0.8rem; text-align: center; margin: 10px 0 18px; max-width: 40ch; }
+
+  #panel { width: min(88vw, 420px); display: flex; flex-direction: column; gap: 14px; }
+  .presets { display: flex; gap: 8px; justify-content: center; }
+  .presets button {
+    flex: 1; padding: 10px 4px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+    font: inherit; font-size: 0.85rem; cursor: pointer;
+  }
+  .presets button.active { border-color: var(--gold); color: var(--gold); }
+  .presets button:focus-visible, .toggles label:focus-within, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+  .slider label { font-size: 0.85rem; color: var(--text-dim); }
+  .slider output { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--text); }
+  .slider input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--gold); margin: 0; }
+
+  .toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; padding-top: 4px; border-top: 1px solid var(--line); }
+  .toggles label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-dim); cursor: pointer; }
+  .toggles input { accent-color: var(--gold); }
+</style>
+
+<header><h1>Ring feel rig</h1></header>
+<div id="televised" class="neutral">neutral</div>
+<div id="wheelwrap"><canvas id="wheel" aria-label="Aim wheel. Drag around the ring to steer, tap the hub for neutral."></canvas></div>
+<p class="hint">Drag around the ring to steer. Flick to spin. Tap the hub to drop back to neutral.</p>
+
+<div id="panel">
+  <div class="presets" id="presets"></div>
+  <div id="sliders"></div>
+  <div class="toggles">
+    <label><input type="checkbox" id="optRing" checked> ring overlay</label>
+    <label><input type="checkbox" id="optRelative"> iPod steering</label>
+    <label><input type="checkbox" id="optSound" checked> sound</label>
+    <label><input type="checkbox" id="optHaptic" checked> haptics</label>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Notches. Screen-space placement of the self-relative labels (real game
+// mirrors these per rider): UP at top, IN at left, OUT at right.
+// Index 0 = up, counting clockwise on screen.
+const LABELS = ["up", "up-out", "out", "down-out", "down", "down-in", "in", "up-in"];
+const N = 8, STEP = Math.PI * 2 / N;
+// Ring CCCNGNNN, offsets from own aim: exposed at 0,+1,+2 (sweeping clockwise
+// here = "toward the barrier side"), Guard directly opposite at +4.
+const RING = ["C","C","C","N","G","N","N","N"];
+
+// ---------------------------------------------------------------------------
+// Tunables. angle units: notches (1.0 = 45°), so numbers stay human.
+const params = {
+  detent:    { label: "detent while dragging", min: 0, max: 1, step: 0.05, fmt: v => Math.round(v*100)+"%" },
+  stiffness: { label: "snap-back stiffness",   min: 20, max: 500, step: 5, fmt: v => v.toFixed(0) },
+  damping:   { label: "snap-back damping",     min: 2, max: 40, step: 0.5, fmt: v => v.toFixed(1) },
+  friction:  { label: "spin friction",         min: 0.2, max: 12, step: 0.1, fmt: v => v.toFixed(1) },
+};
+const PRESETS = {
+  "Hard snap": { detent: 0.85, stiffness: 420, damping: 26, friction: 8 },
+  "Magnet":    { detent: 0.45, stiffness: 180, damping: 14, friction: 3 },
+  "Flywheel":  { detent: 0.10, stiffness: 90,  damping: 9,  friction: 0.8 },
+};
+const P = Object.assign({}, PRESETS["Magnet"]);
+
+// ---------------------------------------------------------------------------
+// State. theta in notch units, continuous. neutral = needle docked.
+let theta = 0, omega = 0;
+let neutral = true;
+let dragging = false;
+let lastNotch = null;
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const televised = document.getElementById("televised");
+const css = getComputedStyle(document.documentElement);
+const C = n => css.getPropertyValue("--" + n).trim();
+
+let size = 0, dpr = 1, cx = 0, cy = 0;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  size = canvas.clientWidth;
+  canvas.width = canvas.height = Math.round(size * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx = cy = size / 2;
+}
+new ResizeObserver(resize).observe(canvas);
+
+const mod = (a, n) => ((a % n) + n) % n;
+const nearest = t => Math.round(t);
+const notchIndex = t => mod(Math.round(t), N);
+
+// ---------------------------------------------------------------------------
+// Feedback: audio tick + haptic pulse when the televised notch changes.
+let audio = null;
+function tickSound() {
+  if (!document.getElementById("optSound").checked) return;
+  if (!audio) { try { audio = new AudioContext(); } catch { return; } }
+  if (audio.state === "suspended") audio.resume();
+  const t = audio.currentTime;
+  const osc = audio.createOscillator(), g = audio.createGain();
+  osc.type = "square"; osc.frequency.value = 1400;
+  g.gain.setValueAtTime(0.06, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+  osc.connect(g).connect(audio.destination);
+  osc.start(t); osc.stop(t + 0.035);
+}
+function tickHaptic() {
+  if (document.getElementById("optHaptic").checked && navigator.vibrate) navigator.vibrate(8);
+}
+let pulse = 0; // visual pop on the active notch, decays each frame
+function onNotchChange(idx) {
+  tickSound(); tickHaptic();
+  pulse = 1;
+  televised.textContent = LABELS[idx];
+  televised.classList.remove("neutral");
+  televised.classList.remove("tick"); void televised.offsetWidth;
+  televised.classList.add("tick");
+}
+function setNeutral() {
+  neutral = true; omega = 0; lastNotch = null;
+  televised.textContent = "neutral";
+  televised.classList.add("neutral");
+  tickHaptic();
+}
+
+// ---------------------------------------------------------------------------
+// Input. Absolute steering: the needle chases the finger's angle.
+// iPod steering: circling the ring winds the needle by the arc you travel.
+let pointerPrev = null; // previous pointer angle (notch units) for relative + velocity
+let velSamples = [];
+
+function pointerAngle(e) {
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left - cx, y = e.clientY - r.top - cy;
+  return { ang: mod(Math.atan2(x, -y) / STEP, N), rad: Math.hypot(x, y) };
+}
+
+canvas.addEventListener("pointerdown", e => {
+  const p = pointerAngle(e);
+  if (p.rad < size * 0.13) { setNeutral(); return; }
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add("dragging");
+  dragging = true; neutral = false; omega = 0;
+  velSamples = [];
+  if (!document.getElementById("optRelative").checked) {
+    // absolute: engage where you touched
+    theta = nearestWrap(theta, p.ang);
+  }
+  pointerPrev = { ang: p.ang, t: e.timeStamp };
+  if (lastNotch === null) { lastNotch = notchIndex(theta); onNotchChange(lastNotch); }
+});
+canvas.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const p = pointerAngle(e);
+  let d = p.ang - pointerPrev.ang;
+  d = mod(d + N/2, N) - N/2; // shortest wrap
+  const dt = Math.max(1, e.timeStamp - pointerPrev.t) / 1000;
+  velSamples.push({ v: d / dt, t: e.timeStamp });
+  velSamples = velSamples.filter(s => e.timeStamp - s.t < 90);
+  theta += d;
+  pointerPrev = { ang: p.ang, t: e.timeStamp };
+});
+function endDrag(e) {
+  if (!dragging) return;
+  dragging = false;
+  canvas.classList.remove("dragging");
+  // release velocity = median of recent samples (flick)
+  const vs = velSamples.map(s => s.v).sort((a, b) => a - b);
+  omega = vs.length ? vs[vs.length >> 1] : 0;
+  if (Math.abs(omega) < 0.6) omega = 0; // below flick threshold: pure snap-back
+}
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", endDrag);
+
+// unwrap target so the needle takes the short way to the finger
+function nearestWrap(from, to) { return from + (mod(to - from + N/2, N) - N/2); }
+
+// ---------------------------------------------------------------------------
+// Physics. Displayed angle while dragging = finger angle biased toward the
+// nearest notch by `detent` (1.0 = fully quantized, the true iPod click).
+// Released: detent-potential torque (-stiffness * sin(2π·θ)/2π per notch)
+// + viscous friction, so a flick rolls over notches then beds into one.
+let prevT = performance.now();
+function displayTheta() {
+  if (!dragging || P.detent === 0) return theta;
+  const n = nearest(theta);
+  return theta + (n - theta) * P.detent;
+}
+function step(now) {
+  const dt = Math.min(0.032, (now - prevT) / 1000);
+  prevT = now;
+  if (!dragging && !neutral) {
+    const spinning = Math.abs(omega) > 0.5;
+    const k = P.stiffness, c = spinning ? P.friction : P.damping;
+    // sub-step for stability at high stiffness
+    const steps = Math.ceil(dt / 0.004);
+    for (let i = 0; i < steps; i++) {
+      const h = dt / steps;
+      const torque = -k * Math.sin(2 * Math.PI * theta) / (2 * Math.PI) - c * omega;
+      omega += torque * h;
+      theta += omega * h;
+    }
+    if (Math.abs(omega) < 0.02 && Math.abs(theta - nearest(theta)) < 0.002) {
+      theta = nearest(theta); omega = 0;
+    }
+  }
+  if (!neutral) {
+    const idx = notchIndex(dragging ? displayTheta() : theta);
+    if (idx !== lastNotch) { lastNotch = idx; onNotchChange(idx); }
+  }
+  pulse = Math.max(0, pulse - dt * 5);
+  draw();
+  requestAnimationFrame(step);
+}
+
+// ---------------------------------------------------------------------------
+// Drawing.
+function arc(r, a0, a1, w, color, alpha) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, a0 - Math.PI/2, a1 - Math.PI/2);
+  ctx.lineWidth = w; ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha; ctx.stroke(); ctx.globalAlpha = 1;
+}
+function draw() {
+  ctx.clearRect(0, 0, size, size);
+  const R = size * 0.40, band = size * 0.115;
+  const dt = displayTheta();
+  const aim = dt * STEP;
+
+  // track
+  arc(R, 0, Math.PI * 2, band, C("ground-2"), 1);
+  arc(R, 0, Math.PI * 2, band, C("line"), 0.5);
+
+  // ring overlay: the pattern the aim drags around
+  if (!neutral && document.getElementById("optRing").checked) {
+    const a = dragging || Math.abs(omega) < 2 ? 0.85 : 0.35; // blur-out when spinning fast
+    for (let i = 0; i < N; i++) {
+      const cell = RING[i];
+      if (cell === "N") continue;
+      const a0 = aim + (i - 0.42) * STEP, a1 = aim + (i + 0.42) * STEP;
+      arc(R, a0, a1, band * 0.82, cell === "C" ? C("exposure") : C("guard"), a * (cell === "C" ? 0.45 : 0.8));
+    }
+  }
+
+  // notch marks + labels
+  ctx.font = `${size * 0.034}px Georgia, serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 0; i < N; i++) {
+    const a = i * STEP - Math.PI / 2;
+    const active = !neutral && i === lastNotch;
+    const px = cx + Math.cos(a) * R, py = cy + Math.sin(a) * R;
+    ctx.beginPath();
+    ctx.arc(px, py, size * (active ? 0.014 + 0.010 * pulse : 0.008), 0, Math.PI * 2);
+    ctx.fillStyle = active ? C("gold") : C("text-dim");
+    ctx.globalAlpha = active ? 1 : 0.6; ctx.fill(); ctx.globalAlpha = 1;
+    const lr = R + band * 0.95;
+    ctx.fillStyle = active ? C("gold") : C("text-dim");
+    ctx.fillText(LABELS[i], cx + Math.cos(a) * lr, cy + Math.sin(a) * lr);
+  }
+
+  // hub (neutral dock)
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.105, 0, Math.PI * 2);
+  ctx.fillStyle = C("ground-2"); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = neutral ? C("gold") : C("line");
+  ctx.globalAlpha = neutral ? 0.9 : 0.7; ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.font = `${size * 0.026}px Georgia, serif`;
+  ctx.fillStyle = neutral ? C("gold") : C("text-dim");
+  ctx.fillText("neutral", cx, cy);
+
+  // the needle: smooth, gold, the one loud thing
+  if (!neutral) {
+    const a = aim - Math.PI / 2;
+    const r0 = size * 0.13, r1 = R - band * 0.62;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.lineWidth = size * 0.012; ctx.lineCap = "round";
+    ctx.strokeStyle = C("gold");
+    ctx.shadowColor = C("gold"); ctx.shadowBlur = size * 0.02;
+    ctx.stroke(); ctx.shadowBlur = 0;
+    // tip
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * (R - band * 0.1), cy + Math.sin(a) * (R - band * 0.1), size * 0.016, 0, Math.PI * 2);
+    ctx.fillStyle = C("gold"); ctx.fill();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Panel.
+const slidersEl = document.getElementById("sliders");
+const outputs = {};
+for (const [key, def] of Object.entries(params)) {
+  const row = document.createElement("div");
+  row.className = "slider";
+  row.innerHTML = `<label for="s-${key}">${def.label}</label><output id="o-${key}"></output>` +
+    `<input type="range" id="s-${key}" min="${def.min}" max="${def.max}" step="${def.step}">`;
+  slidersEl.appendChild(row);
+  const input = row.querySelector("input");
+  outputs[key] = row.querySelector("output");
+  input.value = P[key];
+  outputs[key].textContent = def.fmt(P[key]);
+  input.addEventListener("input", () => {
+    P[key] = parseFloat(input.value);
+    outputs[key].textContent = def.fmt(P[key]);
+    markPreset();
+  });
+}
+const presetsEl = document.getElementById("presets");
+for (const name of Object.keys(PRESETS)) {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.addEventListener("click", () => {
+    Object.assign(P, PRESETS[name]);
+    for (const key of Object.keys(params)) {
+      document.getElementById("s-" + key).value = P[key];
+      outputs[key].textContent = params[key].fmt(P[key]);
+    }
+    markPreset();
+  });
+  presetsEl.appendChild(b);
+}
+function markPreset() {
+  const bs = presetsEl.querySelectorAll("button");
+  Object.keys(PRESETS).forEach((name, i) => {
+    const p = PRESETS[name];
+    bs[i].classList.toggle("active", Object.keys(params).every(k => Math.abs(p[k] - P[k]) < 1e-9));
+  });
+}
+markPreset();
+
+resize();
+requestAnimationFrame(step);
+</script>
