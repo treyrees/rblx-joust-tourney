@@ -261,6 +261,60 @@ kit.describe("PassResolver — the CLAUDE.md invariants", function()
 	end)
 end)
 
+kit.describe("PassResolver — the ring's structural invariants (ADR 0006, CLAUDE.md 9)", function()
+	-- These read Constants.RING generically, so they hold whatever ring ships — they pin the SHAPE
+	-- constraints the equilibrium gate (`tools/rings.luau --verify`) enforces numerically.
+	local n = #Constants.CYCLE
+
+	kit.it("the ring is chiral — some offset is a crit while its mirror is not", function()
+		local chiral = false
+		for off = 0, n - 1 do
+			if (Constants.RING[off] == "crit") ~= (Constants.RING[(n - off) % n] == "crit") then
+				chiral = true
+			end
+		end
+		if not chiral then
+			error("a mirror-symmetric ring can only trade crits; one-sided reads need chirality (ADR 0006)")
+		end
+	end)
+
+	kit.it("polarization: exactly one guard notch, directly opposite the aim", function()
+		local guards = {}
+		for off = 0, n - 1 do
+			if Constants.RING[off] == "guard" then
+				table.insert(guards, off)
+			end
+		end
+		kit.expectEqual(#guards, 1, "one guard notch")
+		kit.expectEqual(guards[1], n / 2, "directly opposite the aim")
+		-- And the derived helper agrees with the opposition table, which is what the copy promises.
+		for _, aim in FOUR do
+			kit.expectEqual(PR.guard(commit(D.IN, aim)), Constants.OPPOSITE[aim], "guard for aim " .. aim)
+		end
+	end)
+
+	kit.it("the exposure is wider than the Shield plate — something is always bare", function()
+		local crits = 0
+		for off = 0, n - 1 do
+			if Constants.RING[off] == "crit" then
+				crits += 1
+			end
+		end
+		if crits <= Constants.SHIELD_BAND then
+			error(string.format(
+				"%d crit notches vs a %d-notch plate: the Shield can cover everything, so the hole card "
+					.. "does not exist (ADR 0006 — the secret IS the gap in coverage)",
+				crits,
+				Constants.SHIELD_BAND
+			))
+		end
+	end)
+
+	kit.it("the aim itself is exposed — offset 0 is a crit notch", function()
+		kit.expectEqual(Constants.RING[0], "crit", "you are exposed exactly where you strike")
+	end)
+end)
+
 kit.describe("PassResolver — breaking and the mortal rung (ADR 0008)", function()
 	kit.it("a landed strike carrying full momentum breaks the direction it hit", function()
 		local res = PR.resolve(

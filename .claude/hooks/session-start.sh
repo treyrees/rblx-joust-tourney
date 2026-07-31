@@ -41,4 +41,7 @@ TESTKIT_QUIET=1 lune run tests/run.luau >&2 || echo "[session-start] WARN: unit 
 echo "[session-start] running design-lint…" >&2
 lune run tools/design-lint.luau >&2 || echo "[session-start] WARN: design-lint failed" >&2
 
+echo "[session-start] running equilibrium verify…" >&2
+lune run tools/rings.luau --verify >&2 || echo "[session-start] WARN: equilibrium verify failed" >&2
+
 echo "[session-start] ready." >&2

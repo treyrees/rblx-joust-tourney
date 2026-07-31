@@ -572,6 +572,18 @@ if readEdge < 0.75 then
 	))
 end
 
+-- The ceiling is as load-bearing as the floor. During the ring investigation, several candidate
+-- rings passed every check below while a perfect reader beat random 97%+ of the time — information
+-- had become the whole game, and §4's "anyone can win any pass" was dead with all gates green.
+-- Healthy configurations measured 83-87%; the dominant ones 97-100%. The ceiling sits between.
+if readEdge > 0.93 then
+	table.insert(failures, string.format(
+		"read-dominance: a perfect read beats random %.1f%% of the time (want ≤93%%) — information has "
+			.. "swallowed the dice and anyone-can-win is dead (GAME_SPEC §4, CLAUDE.md invariant 7)",
+		100 * readEdge
+	))
+end
+
 if longShotRate > 0.5 then
 	table.insert(failures, string.format(
 		"slot-machine convergence: %.1f%% of falls came off rolls the rider was %.0f%%+ favoured to make "
@@ -597,7 +609,7 @@ print(string.format("read edge: a perfect read beats random %.1f%% of the time",
 print(string.format("camper ranks %d of %d", camperRank, #standing))
 print("")
 if #failures == 0 then
-	print("VERDICT: all three checks pass — these numbers are citable.")
+	print("VERDICT: all checks pass — these numbers are citable.")
 else
 	print("VERDICT: " .. tostring(#failures) .. " check(s) failed")
 	for _, f in failures do

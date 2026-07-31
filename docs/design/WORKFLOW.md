@@ -64,13 +64,16 @@ being current. That is the entire discipline; everything below is how you uphold
 ## The two gates (wired into CI / the SessionStart hook)
 
 ```bash
-lune run tests/run.luau          # the code is correct
-lune run tools/design-lint.luau  # docs ↔ code ↔ ADRs are consistent
-lune run tools/sim.luau          # the tuning numbers still hold their invariants
+lune run tests/run.luau             # the code is correct
+lune run tools/design-lint.luau     # docs ↔ code ↔ ADRs are consistent
+lune run tools/sim.luau             # the tuning numbers hold over whole matches (scripted riders)
+lune run tools/rings.luau --verify  # ...and at equilibrium (what scripted riders cannot see)
 ```
 
-Green on all three ⇒ the change is consistent by construction. Red ⇒ fix before you push. Nothing
-else gates — these *are* the safety net, on purpose.
+Green on all four ⇒ the change is consistent by construction. Red ⇒ fix before you push. Nothing
+else gates — these *are* the safety net, on purpose. The last two are one gate with two halves:
+the round robin once green-lit a configuration whose equilibrium was structurally dead (crit rate
+0.0%, hole card worth 0.01 Balance), which is why the solver half exists (ADR 0010).
 
 They run in two places, and the difference matters:
 

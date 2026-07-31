@@ -15,8 +15,9 @@ ADR, and add your row in the same commit** — the ledger is the id-collision gu
 | [0007](0007-runup-input-event-driven-spur.md) | The run-up is event-driven — no inner tick, a beat-gated spur, and a public momentum meter | 2026-07-30 |
 | [0008](0008-breaking-momentum-and-the-mortal-rung.md) | Breaking — momentum degrades the slice it strikes, down a ladder that ends at mortal | 2026-07-30 |
 | [0009](0009-defence-is-prorated-supershield-is-state.md) | Defence is prorated like offence, and the Supershield is a state, not a price | 2026-07-30 |
+| [0010](0010-invariants-both-bounds-and-the-equilibrium-gate.md) | The invariants gain both bounds and an equilibrium gate | 2026-07-30 |
 
 > **0003 is reserved, not free.** It belongs to the monetization ADR on the open branch
 > `claude/game-monetization-analysis-s1avst` (PR #5), which was written before 0004/0005 and is not yet
 > merged. The gap above is deliberate: taking 0003 would trip the duplicate-id check the moment that PR
-> lands. Next free id is **0010**.
+> lands. Next free id is **0011**.

@@ -141,8 +141,16 @@ dice — and a correct read always beats a rarer horse.** Skill is the trump sui
 odds, never immunity to being outplayed. Everything downstream (matchmaking, monetization, meta
 content) hangs off this sentence.
 
-**Tuning guardrail:** the crit tier must usually force a genuinely scary roll — the matrix must
-matter more than the dice on average, or the read game dies and it's only a slot machine.
+**Tuning guardrail, both bounds:** the crit tier must usually force a genuinely scary roll — the
+matrix must matter more than the dice on average, or the read game dies and it's only a slot
+machine. And the mirror bound, learned the hard way: information must never matter so much that a
+perfect reader simply *wins* — several candidate rings measured 97%+ for perfect information with
+every other check green, and at that point "anyone can win any pass" is dead and the game is chess
+wearing dice as jewelry. Both bounds are gated (CLAUDE.md invariant 7; sim verdicts ≥75%, ≤93%).
+A second guardrail rides with it: the hole card must stay live *at equilibrium* — worth real
+Balance between good players, narrowed by the televised aim to a coin flip and no further — which
+no scripted-rider instrument can check and `tools/rings.luau --verify` exists to enforce
+(CLAUDE.md invariant 9, ADR 0010).
 
 ## 5. Escalation & win condition
 

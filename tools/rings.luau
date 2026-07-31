@@ -30,6 +30,7 @@ local FROM_LETTER = { C = "crit", G = "guard", N = "normal" }
 
 -- ---- args --------------------------------------------------------------------------------------
 local topN, showAll, onlyRing = 12, false, nil :: string?
+local verify = false
 local notches, anchored, contiguous = #Constants.CYCLE, false, false
 local guardOpposite = false
 local dumpMix = false
@@ -79,6 +80,14 @@ do
 		elseif args[i] == "--guard-mode" then
 			Constants.GUARD_MODE = args[i + 1]
 			i += 2
+		elseif args[i] == "--verify" then
+			-- Gate mode: solve the SHIPPED configuration at full precision and enforce the structural
+			-- invariants no round robin can see (CLAUDE.md invariants 8 and 9). Exists because during
+			-- the ring investigation a configuration passed every sim.luau verdict while structurally
+			-- dead: equilibrium crit rate 0.0%, hole card worth 0.01 Balance. Scripted riders never
+			-- find the exploit; the solver is the instrument that does.
+			verify = true
+			i += 1
 		elseif args[i] == "--dump-mix" then
 			dumpMix = true
 			i += 1
@@ -239,7 +248,7 @@ elseif contiguous then
 			end
 		end
 	end
-elseif not onlyRing then
+elseif not onlyRing and not verify then
 	error(string.format("--notches %d needs an explicit --ring CODE, or --contiguous", notches))
 end
 
@@ -273,7 +282,7 @@ end
 -- mix, then folds that response into the mix. The running payoff vector makes a step O(N) rather
 -- than O(N^2), which is what keeps a 45-ring sweep instant.
 -- A sweep trades solver precision for breadth; a single named ring gets the precise treatment.
-local ITERS = if onlyRing then 200000 else 20000
+local ITERS = if onlyRing or verify then 200000 else 20000
 
 local function solve(M: { { number } }): { number }
 	local acc = table.create(N, 0)
@@ -571,6 +580,110 @@ local function analyse(r: { [number]: string }): Report
 		blockRate = blocks / strikes,
 		topStrat = stratName(STRATS[top]),
 	}
+end
+
+-- ---- verify (the equilibrium gate) --------------------------------------------------------------
+-- Solves the SHIPPED ring at the SHIPPED band and enforces the invariants only an equilibrium can
+-- check. Thresholds sit between the measured healthy configurations and the measured dead ones —
+-- each bound has a real corpse behind it, not a guess (ADR 0010 cites the runs).
+if verify then
+	-- With no --ring, verify the shipped Constants.RING; with one, verify that candidate instead
+	-- (which is how the negative cases in ADR 0010 were produced).
+	local shipped
+	if onlyRing then
+		shipped = parseRing(onlyRing)
+	else
+		shipped = {}
+		for i = 0, notches - 1 do
+			shipped[i] = Constants.RING[i]
+		end
+	end
+	local rep = analyse(shipped)
+
+	local critNotches = 0
+	for i = 0, notches - 1 do
+		if shipped[i] == "crit" then
+			critNotches += 1
+		end
+	end
+
+	type Check = { name: string, value: string, bound: string, ok: boolean }
+	local checks: { Check } = {
+		{
+			name = "solver converged (exploitability)",
+			value = string.format("%.2f", rep.exploit),
+			bound = "< 0.50",
+			ok = rep.exploit < 0.5,
+		},
+		{
+			-- Invariant 9: the hole card stays live. Dead configs measured 0.00-0.52; shipped 8.12.
+			name = "hole card is worth real Balance",
+			value = string.format("%.2f", rep.fullEdge - rep.aimEdge),
+			bound = ">= 3.00",
+			ok = (rep.fullEdge - rep.aimEdge) >= 3,
+		},
+		{
+			-- Invariant 9's other half: hidden, but not opaque — the televised aim must narrow the
+			-- Shield to roughly a street of poker, never to certainty and never to nothing.
+			name = "shield stays a coin flip after the aim",
+			value = string.format("%.2f bits", rep.residBits),
+			bound = "0.50 - 2.00",
+			ok = rep.residBits >= 0.5 and rep.residBits <= 2.0,
+		},
+		{
+			-- The crit tier must exist between good players, not only against beginners. The old ring
+			-- measured 0.1% here with every match-level gate green.
+			name = "crits fire at equilibrium",
+			value = string.format("%.1f%%", 100 * rep.critRate),
+			bound = ">= 10%",
+			ok = rep.critRate >= 0.10,
+		},
+		{
+			-- No resting spot: a pure line carrying the equilibrium is a solved game. The dead ring's
+			-- top line carried 39.6%.
+			name = "no dominant pure line",
+			value = string.format("%.1f%%", 100 * rep.maxWeight),
+			bound = "<= 35%",
+			ok = rep.maxWeight <= 0.35,
+		},
+		{
+			-- Structural: one-sided crits exist iff the ring is chiral (ADR 0006).
+			name = "ring is chiral",
+			value = if rep.chiral then "yes" else "NO",
+			bound = "yes",
+			ok = rep.chiral,
+		},
+		{
+			-- Structural: the hole card IS the gap between exposure and plate. Cover everything and
+			-- there is no secret left to have.
+			name = "exposure wider than the Shield plate",
+			value = string.format("%d crit vs band %d", critNotches, Constants.SHIELD_BAND),
+			bound = "crit > band",
+			ok = critNotches > Constants.SHIELD_BAND,
+		},
+	}
+
+	print(string.format(
+		"ring verify — shipped %s, %d notches, shield band %d, %d FP iterations",
+		ringCode(shipped),
+		notches,
+		Constants.SHIELD_BAND,
+		ITERS
+	))
+	local failed = 0
+	for _, c in checks do
+		if not c.ok then
+			failed += 1
+		end
+		print(string.format("  %s %-42s %16s   (want %s)", if c.ok then "OK " else "✗✗ ", c.name, c.value, c.bound))
+	end
+	print("")
+	if failed == 0 then
+		print("VERIFY: the shipped ring holds every equilibrium invariant.")
+	else
+		print(string.format("VERIFY: %d invariant(s) violated — the round robin CANNOT clear these; do not ship.", failed))
+	end
+	process.exit(if failed == 0 then 0 else 1)
 end
 
 -- ---- run ---------------------------------------------------------------------------------------
