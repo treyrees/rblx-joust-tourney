@@ -2,9 +2,11 @@
 -- rings.luau — sweep or solve rings over the wheel's notches. Run from the repo root:
 --     lune run tools/rings.luau [--top N] [--all] [--ring CODE]
 --
--- A RING is the defender's map: what happens at each quarter-turn offset from their own aim.
--- Four offsets, three classes (crit / guard / normal) — 81 rings, 45 once mirror images are folded
--- together. `Constants.RING` picks one; this tool asks which one makes the best game.
+-- A RING is the defender's map: what happens at each notch offset from their own aim. Three classes
+-- per notch (crit / guard / normal), so the space is 3^notches — 81 on the four-notch wheel this tool
+-- was written for, 6561 on the eight-notch wheel ADR 0006 settled on, before mirror images and the
+-- structural constraints (`--guard-opposite`, `--contiguous`) fold it down. `Constants.RING` picks
+-- one; this tool asks which one makes the best game.
 --
 -- The instrument is a solver, not a race. For each ring it builds the one-pass payoff matrix over
 -- every (Shield, Aim) a rider can commit, then finds the symmetric equilibrium by fictitious play.
@@ -105,7 +107,11 @@ do
 			anchored = true
 			i += 1
 		else
-			i += 1
+			-- Loud, like tools/sim.luau: a silently-skipped flag means a run that is not the run the
+			-- author asked for, reported with the same confidence as one that is. This tool is half of
+			-- the combat-axis gate, so a mistyped `--shield-bnd 3` quietly solving the SHIPPED band is
+			-- exactly the failure mode that must never be quiet.
+			error(string.format("rings: unknown argument %q — see the usage line at the top of tools/rings.luau", args[i]))
 		end
 	end
 end

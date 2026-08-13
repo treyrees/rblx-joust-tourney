@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
           }
         ]
       }
@@ -20,14 +20,37 @@
       "Glob",
       "Bash(git *)",
       "Bash(lune *)",
+      "Bash(rojo *)",
+      "Bash(luau-lsp *)",
+      "Bash(tools/gates.sh*)",
+      "Bash(tools/install-toolchain.sh*)",
+      "Bash(TESTKIT_QUIET=* lune *)",
+      "Bash(TESTKIT_FILTER=* lune *)",
+      "Bash(QUICK=* tools/gates.sh*)",
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(grep *)",
+      "Bash(rg *)",
       "Bash(sed *)",
-      "Bash(rojo *)",
+      "Bash(awk *)",
+      "Bash(find *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(diff *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(echo *)",
+      "Bash(pwd)",
+      "Bash(cd *)",
+      "Bash(mkdir *)",
+      "Bash(chmod *)",
+      "Bash(test *)",
+      "Bash(true)",
       "mcp__github__create_pull_request",
       "mcp__github__merge_pull_request",
       "mcp__github__update_pull_request",
+      "mcp__github__pull_request_read",
       "mcp__github__pull_request_review_write",
       "mcp__github__add_comment_to_pending_review",
       "mcp__github__add_issue_comment",
@@ -35,6 +58,11 @@
       "mcp__github__resolve_review_thread",
       "mcp__github__unresolve_review_thread",
       "mcp__github__request_copilot_review",
+      "mcp__github__get_file_contents",
+      "mcp__github__list_pull_requests",
+      "mcp__github__get_job_logs",
+      "mcp__github__actions_list",
+      "mcp__github__actions_get",
       "mcp__Claude_Code_Remote"
     ]
   }

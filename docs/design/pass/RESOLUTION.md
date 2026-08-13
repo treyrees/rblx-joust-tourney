@@ -2,7 +2,7 @@
 maps-to: [src/shared/PassResolver.luau, src/shared/Constants.luau#RING, src/shared/Constants.luau#MATRIX, src/shared/Constants.luau#BREAK, tools/sim.luau, tools/rings.luau]
 decisions: [0001, 0004, 0006, 0008, 0009]
 owner: trey
-updated: 2026-07-30
+updated: 2026-08-13
 ---
 
 # Pass resolution — the ring, Balance, breaking, and the teeter roll

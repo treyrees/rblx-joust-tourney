@@ -1,6 +1,16 @@
 --!strict
 -- Constants.luau — the single source of truth for every tuning number. Never hardcode a number in a
 -- system module; name it here and reference it. (Invariant carried from the predecessor repo.)
+--
+-- The direction/ring tables below carry EXPLICIT annotations from Types.luau. That is not decoration:
+-- left to inference, `DIRECTIONS.NEUTRAL` and `RING[n]` widen to `string`, and every `Direction`- or
+-- `Tier`-typed signature downstream degrades to "any string will do" while still reading as strict.
+-- The type-check gate (`tools/gates.sh typecheck`, ADR 0011) found exactly that, eight errors deep.
+
+local Types = require(script.Parent.Types)
+
+type Direction = Types.Direction
+type RingClass = Types.RingClass
 
 local Constants = {}
 
@@ -27,7 +37,7 @@ Constants.PASS.MIN_RUNUP_SECONDS = Constants.PASS.AIM_LOCK_BEFORE_TICK / Constan
 -- BASIS — in/out/up/down are the words the design speaks — with the diagonals between them giving
 -- the wheel its granularity: eight notches of 45 degrees. Self-relative framing throughout, so the
 -- mirrored pass carries no left/right ambiguity. Neutral is a legitimate state and the default.
-Constants.DIRECTIONS = {
+local DIRECTIONS: Types.DirectionNames = {
 	IN = "in",
 	OUT = "out",
 	UP = "up",
@@ -38,10 +48,11 @@ Constants.DIRECTIONS = {
 	UP_OUT = "up-out",
 	NEUTRAL = "neutral",
 }
+Constants.DIRECTIONS = DIRECTIONS
 
 -- Direction opposition: index distance 4 on the cycle, tabled so callers stay O(1) and the pairing
 -- has a single home. Polarization (§3) derives the Guard from this.
-Constants.OPPOSITE = {
+local OPPOSITE: { [Direction]: Direction } = {
 	["up"] = "down",
 	["up-in"] = "down-out",
 	["in"] = "out",
@@ -52,6 +63,7 @@ Constants.OPPOSITE = {
 	["up-out"] = "down-in",
 	["neutral"] = "neutral",
 }
+Constants.OPPOSITE = OPPOSITE
 
 -- The cycle: the eight notches in a fixed rotational order, so "one notch around the ring" is a
 -- well-defined idea. It is stated in the self-relative labels rather than in screen geometry on
@@ -59,7 +71,8 @@ Constants.OPPOSITE = {
 -- ambiguity the self-relative framing exists to kill (§3). The rotational sense is "from up, sweep
 -- toward the barrier side" for both riders, so the chiral ring below means the same body-relative
 -- thing in a mirrored pass. Index distance 4 is opposition; CYCLE and OPPOSITE agree by construction.
-Constants.CYCLE = { "up", "up-in", "in", "down-in", "down", "down-out", "out", "up-out" }
+local CYCLE: { Direction } = { "up", "up-in", "in", "down-in", "down", "down-out", "out", "up-out" }
+Constants.CYCLE = CYCLE
 
 -- The RING (ADR 0006): what happens at each notch offset from the defender's own aim. Offset 0 is
 -- the notch they are aiming; offset 4 is the notch they are aiming away from.
@@ -76,7 +89,7 @@ Constants.CYCLE = { "up", "up-in", "in", "down-in", "down", "down-out", "out", "
 --     reads that WIN rather than exchange — exist iff the ring is chiral. ADR 0006 cites the sweep.
 --   * MORE EXPOSURE THAN SHIELD — three crit notches against a two-notch Shield means something is
 --     always bare, and WHICH is the hole card. Equilibrium leaves ~1 bit of it unreadable.
-Constants.RING = {
+local RING: { [number]: RingClass } = {
 	[0] = "crit",
 	[1] = "crit",
 	[2] = "crit",
@@ -86,6 +99,7 @@ Constants.RING = {
 	[6] = "normal",
 	[7] = "normal",
 }
+Constants.RING = RING
 
 -- How many notches the Shield covers, counted from the notch it is placed on. Two notches is a
 -- 90-degree plate — the same quarter-circle the four-notch game's one-notch Shield covered, kept

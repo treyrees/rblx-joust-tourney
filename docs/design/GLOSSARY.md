@@ -2,7 +2,7 @@
 maps-to: [src/shared/PassResolver.luau, src/shared/Constants.luau#MATRIX, src/shared/Constants.luau#BREAK]
 decisions: [0004, 0006, 0008, 0009]
 owner: trey
-updated: 2026-07-30
+updated: 2026-08-13
 ---
 
 # GLOSSARY — the words the pass is played in
