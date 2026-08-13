@@ -1,6 +1,9 @@
 --!strict
 -- sim.luau — the headless pass simulator. Run from the repo root:
 --     lune run tools/sim.luau [--matches N] [--seed S] [--curve linear|ease_in|floor_ease_in]
+--     lune run tools/sim.luau --smoke     -- ~7s instead of ~2min; verdicts hold, rates are not citable
+--
+-- Unknown arguments are a hard error, not a shrug: this tool exists to produce numbers ADRs quote.
 --
 -- This is the instrument the WORKFLOW's combat-axis rule points at: no tuning number in
 -- Constants.MATRIX / Constants.PRORATION gets pinned by an ADR until a run of this tool is cited in
@@ -38,12 +41,24 @@ local MAX_PASSES = 30 -- a match this long is a convergence failure, and is repo
 -- every aim-and-shield pair; at that size the gate had grown to over two minutes. Pass --matches for
 -- a tighter run when pinning a number.
 local matches, seed = 8000, 20260729
+-- A smoke run trades sample size for wall clock: ~7 seconds instead of ~2 minutes. Every verdict
+-- still runs and every threshold still holds — measured across five seeds the read edge lands in
+-- 82.8-87.2% against a 75-93% band and convergence in 3.22-3.26 against a 3-5 band, so the checks
+-- have margin to spare at this scale. What it CANNOT do is produce a citable number: the round robin
+-- reports rates to a tenth of a point, and at 400 matches per pairing that precision is fictional.
+-- The banner below says so, and `## Consequences` should never quote a smoke run (WORKFLOW.md).
+local SMOKE_MATCHES = 400
+local smoke = false
 do
 	local args = process.args
 	local i = 1
 	while i <= #args do
 		local a = args[i]
-		if a == "--matches" then
+		if a == "--smoke" then
+			smoke = true
+			matches = SMOKE_MATCHES
+			i += 1
+		elseif a == "--matches" then
 			matches = tonumber(args[i + 1]) or matches
 			i += 2
 		elseif a == "--seed" then
@@ -118,7 +133,11 @@ do
 			end
 			i += 2
 		else
-			i += 1
+			-- Unknown flags used to be skipped silently. That is a dangerous default for an instrument
+			-- whose whole job is to produce numbers an ADR will quote: a typo'd `--machts 40000` ran the
+			-- DEFAULT configuration and printed a confident verdict about it, and nothing anywhere said
+			-- the run was not the run the author asked for. Fail loudly instead.
+			error(string.format("sim: unknown argument %q — see the usage line at the top of tools/sim.luau", a))
 		end
 	end
 end
@@ -446,6 +465,9 @@ print(string.format(
 	#Constants.CYCLE,
 	Constants.SHIELD_BAND
 ))
+if smoke then
+	print("SMOKE RUN — reduced sample. Verdicts are meaningful; the printed rates are NOT citable.")
+end
 print(string.format(
 	"matrix: normal %.1f  crit %.1f  weak %.1f  thin-block x%.2f  restore %.1f  max-bonus %.2f",
 	Constants.MATRIX.NORMAL_DAMAGE,
@@ -609,7 +631,11 @@ print(string.format("read edge: a perfect read beats random %.1f%% of the time",
 print(string.format("camper ranks %d of %d", camperRank, #standing))
 print("")
 if #failures == 0 then
-	print("VERDICT: all checks pass — these numbers are citable.")
+	if smoke then
+		print("VERDICT: all checks pass at smoke scale — re-run without --smoke before citing a number.")
+	else
+		print("VERDICT: all checks pass — these numbers are citable.")
+	end
 else
 	print("VERDICT: " .. tostring(#failures) .. " check(s) failed")
 	for _, f in failures do

@@ -114,9 +114,15 @@ local function buildTree(dirPath: string, name: string, className: string)
 end
 
 -- ---- public API --------------------------------------------------------------------------------
--- Build the tree from a project src/ root. `shared/` mounts under ReplicatedStorage.Shared and
--- `server/` under ServerScriptService — so server modules (the ported CombatEngine, MatchRunner)
--- can be required and unit-tested headlessly, same source Rojo syncs into Studio.
+-- Build the tree from a project src/ root, mirroring default.project.json exactly:
+--   src/shared → ReplicatedStorage.Shared      src/server → ServerScriptService
+--   src/client → StarterPlayer.StarterPlayerScripts    src/gui → StarterGui
+-- so any module Rojo syncs can be required and unit-tested headlessly, from the same source.
+--
+-- client/ and gui/ were absent from this shim until the four mounts were made to match the project
+-- file. The consequence was structural, not cosmetic: client-side logic that is pure and eminently
+-- testable — wheel-angle-to-notch quantization, hold-fraction accounting, the reveal's formatting —
+-- had nowhere to be tested, so CLAUDE.md's headless-first rule silently applied to half the tree.
 function M.build(srcRoot: string)
 	local shared = buildTree(srcRoot .. "/shared", "Shared", "Folder")
 	local rs = newInstance("ReplicatedStorage", "ReplicatedStorage")
@@ -125,6 +131,12 @@ function M.build(srcRoot: string)
 	local server = buildTree(srcRoot .. "/server", "Server", "Folder")
 	local sss = newInstance("ServerScriptService", "ServerScriptService")
 	addChild(sss, server)
+
+	local client = buildTree(srcRoot .. "/client", "StarterPlayerScripts", "Folder")
+	local starterPlayer = newInstance("StarterPlayer", "StarterPlayer")
+	addChild(starterPlayer, client)
+
+	local gui = buildTree(srcRoot .. "/gui", "StarterGui", "StarterGui")
 
 	-- In-memory DataStore mock: storeName -> { key -> value }. Lets the persistence layer be exercised
 	-- headlessly (Persistence.lua reads DataStoreService/HttpService/RunService). Specs seed/read via
@@ -162,6 +174,10 @@ function M.build(srcRoot: string)
 				return rs
 			elseif serviceName == "ServerScriptService" then
 				return sss
+			elseif serviceName == "StarterPlayer" then
+				return starterPlayer
+			elseif serviceName == "StarterGui" then
+				return gui
 			elseif serviceName == "DataStoreService" then
 				return { GetDataStore = function(_s, storeName: string)
 					return getStore(storeName)
@@ -189,26 +205,60 @@ function M.build(srcRoot: string)
 	}
 	M._shared = shared
 	M._server = server
+	M._client = client
+	M._gui = gui
 end
 
--- require a module that lives directly under ReplicatedStorage.Shared, by name.
+-- require a module that lives directly under one of the four mounts, by name.
+local function requireFrom(root: any, label: string, name: string)
+	assert(root, "robloxenv.build() must be called before require" .. label .. "()")
+	local inst = Instance.FindFirstChild(root, name)
+	if not inst then
+		error("robloxenv: no " .. label .. " module named '" .. name .. "'")
+	end
+	return requireInstance(inst)
+end
+
+-- src/shared → ReplicatedStorage.Shared
 function M.requireShared(name: string)
-	assert(M._shared, "robloxenv.build() must be called before requireShared()")
-	local inst = Instance.FindFirstChild(M._shared, name)
-	if not inst then
-		error("robloxenv: no Shared module named '" .. name .. "'")
-	end
-	return requireInstance(inst)
+	return requireFrom(M._shared, "Shared", name)
 end
 
--- require a module that lives directly under ServerScriptService (src/server), by name.
+-- src/server → ServerScriptService
 function M.requireServer(name: string)
-	assert(M._server, "robloxenv.build() must be called before requireServer()")
-	local inst = Instance.FindFirstChild(M._server, name)
-	if not inst then
-		error("robloxenv: no Server module named '" .. name .. "'")
+	return requireFrom(M._server, "Server", name)
+end
+
+-- src/client → StarterPlayer.StarterPlayerScripts
+function M.requireClient(name: string)
+	return requireFrom(M._client, "Client", name)
+end
+
+-- src/gui → StarterGui
+function M.requireGui(name: string)
+	return requireFrom(M._gui, "Gui", name)
+end
+
+-- Every ModuleScript under one of the four mounts, as { name → instance }, recursing into folders.
+-- Exists so a spec can assert something about EVERY module rather than about a list someone has to
+-- remember to extend — which is how tests/Purity.spec.luau covers files that do not exist yet.
+function M.modulesUnder(root: any, out: { [string]: any }?, prefix: string?): { [string]: any }
+	local acc = out or {}
+	local children = rawget(root, "_children") or {}
+	for name, child in children do
+		local full = if prefix then prefix .. "/" .. name else name
+		if rawget(child, "_source") then
+			acc[full] = child
+		else
+			M.modulesUnder(child, acc, full)
+		end
 	end
-	return requireInstance(inst)
+	return acc
+end
+
+-- The raw source text of a module instance, for specs that lint rather than execute.
+function M.sourceOf(inst: any): string
+	return rawget(inst, "_source")
 end
 
 return M
