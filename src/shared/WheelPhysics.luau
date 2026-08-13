@@ -13,6 +13,9 @@
 -- deterministic.
 
 local Constants = require(script.Parent.Constants)
+local Types = require(script.Parent.Types)
+
+type Direction = Types.Direction
 
 local W = Constants.WHEEL
 local N = #Constants.CYCLE
@@ -151,8 +154,8 @@ function WheelPhysics.notchIndex(self: WheelPhysics): number?
 	return math.round(self:displayTheta()) % N
 end
 
--- The televised state as the direction word the design speaks (Constants.DIRECTIONS values).
-function WheelPhysics.direction(self: WheelPhysics): string
+-- The televised state as the direction word the design speaks (Types.Direction).
+function WheelPhysics.direction(self: WheelPhysics): Direction
 	local idx = self:notchIndex()
 	if idx == nil then
 		return Constants.DIRECTIONS.NEUTRAL
