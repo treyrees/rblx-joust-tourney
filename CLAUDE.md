@@ -43,6 +43,11 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
     alignment, breaking costs spurred run-up time, proration costs televised commitment). Found
     twice, from opposite directions, in ADR 0008/0009. When a mechanic is dead or mandatory, look
     here first before reaching for its price.
+11. **The rail sees what the opponent sees, never more.** No spectator, replay, stream, party view or
+    developer convenience is ever sent a value the opponent's client does not already hold — the
+    Shield reaches everyone at impact, together. Invariant 3's authority extended to third parties
+    (ADR 0014); it is what makes the friend-on-the-rail relay structurally impossible rather than a
+    thing to police, and it also means information is never a thing we sell.
 
 ## Commands
 
@@ -107,4 +112,6 @@ unit-tested and game-agnostic.
 ## Current milestone
 
 **M1: the gray-box pass, and nothing else** (GAME_SPEC §13). Success = "one more round" behavior +
-unprompted bluffing within ~10 matches.
+unprompted bluffing within ~10 matches. The single lobby piece M1 builds is the re-mount contract
+([docs/design/loop/LOBBY.md](docs/design/loop/LOBBY.md) §6.2), because criterion (a) measures it;
+everything else in the yard is designed-not-built.

@@ -17,8 +17,12 @@ ADR, and add your row in the same commit** — the ledger is the id-collision gu
 | [0009](0009-defence-is-prorated-supershield-is-state.md) | Defence is prorated like offence, and the Supershield is a state, not a price | 2026-07-30 |
 | [0010](0010-invariants-both-bounds-and-the-equilibrium-gate.md) | The invariants gain both bounds and an equilibrium gate | 2026-07-30 |
 | [0011](0011-typecheck-gate-and-one-toolchain.md) | A type-check gate, one pinned toolchain, and one definition of "the gates" | 2026-08-13 |
+| [0012](0012-tilt-yard-is-the-interface.md) | The tilt-yard is the interface — one room, and the walk is the price of changing your mind | 2026-08-13 |
+| [0013](0013-ghosts-are-habits-not-recordings.md) | Opponent supply is a habit register — a ghost is a habit, not a recording, and the yard has no fake people | 2026-08-13 |
+| [0014](0014-the-rail-is-a-scouting-stand.md) | The rail is a scouting stand, and information parity is absolute | 2026-08-13 |
+| [0015](0015-one-duel-is-a-match-the-gauntlet-is-the-run.md) | One duel is a match, the gauntlet is the run, and the stake that escalates is exposure | 2026-08-13 |
 
 > **0003 is reserved, not free.** It belongs to the monetization ADR on the open branch
 > `claude/game-monetization-analysis-s1avst` (PR #5), which was written before 0004/0005 and is not yet
 > merged. The gap above is deliberate: taking 0003 would trip the duplicate-id check the moment that PR
-> lands. Next free id is **0012**.
+> lands. Next free id is **0016**.

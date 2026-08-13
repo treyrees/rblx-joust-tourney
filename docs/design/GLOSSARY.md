@@ -11,6 +11,10 @@ updated: 2026-08-13
 > ledger of the names they replaced. [GAME_SPEC.md](GAME_SPEC.md) §3 owns the *design*;
 > [pass/RESOLUTION.md](pass/RESOLUTION.md) owns the *rule as implemented*; this owns the *vocabulary*.
 >
+> The **yard** has its own small vocabulary (the lists, the rail, the glove, the pennant, a ghost, a
+> house rider) and it is defined where it is used: [loop/LOBBY.md](loop/LOBBY.md) §11. This doc stays
+> the pass's.
+>
 > Why a glossary this early: GAME_SPEC §2 makes the creator/meta layer a design target rather than a
 > byproduct, and that layer runs on shared words. A matchup chart that fits in a thumbnail needs terms
 > that fit in a thumbnail, and it needs everyone using the same ones. Fixed by

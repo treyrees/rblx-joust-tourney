@@ -1,6 +1,6 @@
 ---
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
-decisions: [0001, 0002, 0004, 0006, 0007, 0008, 0009]
+decisions: [0001, 0002, 0004, 0006, 0007, 0008, 0009, 0012, 0013, 0014, 0015]
 owner: trey
 updated: 2026-08-13
 ---
@@ -18,7 +18,9 @@ A **recurring gauntlet of fast 1v1 jousts** on Roblox. Each pass is one committe
 resolved in a single tick: the horse makes the automation diegetic (nobody asks why they can't steer
 mid-charge). Matches are best-of-passes until someone is **unhorsed**. Between matches: the chase —
 rarer **horses** (vertical power) and **lances** (playstyle identity, native hotbar). The lobby is a
-tilt-yard where waiting is spectating. Target cycle: **sub-15-second pass = ~45% intermission
+tilt-yard where **spectating is scouting** — the founding line said "waiting is spectating", but
+ghost-first supply deletes the wait, so the rail's purpose is reads rather than patience (§8,
+ADR 0014). Target cycle: **sub-15-second pass = ~45% intermission
 selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carrying 90% of the emotion.
 
 ## 2. Comp positioning
@@ -33,8 +35,10 @@ selection / ~45% run-up (active) / ~10% resolution** — 10% of the time carryin
   1. Progression and matchmaking rise together — settled as **horse-tier rooms** (ADR 0002): the
      horse you bring is the room you are in, and the room sets the speed.
   2. An ante per match makes short rounds meaningful.
-  3. **Async ghosts are the population cheat code** — a ghost is just a Shield choice + an aim trace;
-     mechanically indistinguishable from a live opponent. **Ghost-first is plan-of-record** (Thing 0).
+  3. **Async ghosts are the population cheat code** — a Shield choice + an aim trace is what gets
+     *recorded*; what gets *ridden* is a habit fitted from many of them, sampled fresh at each commit
+     (ADR 0013 — a replayed pass was committed against a different opponent's aim, so it is either
+     nonsense or a memorizable tape). **Ghost-first is plan-of-record** (Thing 0).
   4. The mind game comes from a wager/commit layer, not mechanical inputs.
   5. Best-of-N turns RPS into yomi (earlier passes teach habits).
 - **The meta/creator layer is a design target, not a byproduct.** A demonstrated analytical-content
@@ -200,12 +204,35 @@ legible while archetypes stay arguable (tier-list fuel).
 
 ## 8. The loop & the lobby
 
-Tilt-yard lobby where **waiting is spectating** (the UBG masterstroke): visible queue, rail crowd
-watching live passes — both public aims and offense meters visible, guards revealed at impact; every
-pass is legible to the rail. Instant requeue; loss costs an ante, never a session. **Post-pass
-reveal** ("you leaned HIGH, they shielded LOW — counter!") turns every loss into a lesson and every
-clip into content. Player-facing matchup data (per-matchup win rates, pass history, commit-sequence
-replays — cheap, a match is a short decision list).
+> Deep doc: **[loop/LOBBY.md](loop/LOBBY.md)** — the tilt-yard, and the social game around the pass.
+> ADRs 0012 (the yard is the interface), 0013 (opponent supply), 0014 (the rail), 0015 (the wrapper).
+
+A **tilt-yard**: one room, every mechanic in a place, and every station within sight of the mounting
+block. Passes are legible to the rail — both aims and both meters public, Shields revealed at impact
+and **never a frame earlier for anyone** (invariant 11). Instant requeue aimed at the rider who just
+beat you; loss costs an ante, never a session. **Post-pass reveal** ("you leaned HIGH, they shielded
+LOW — counter!") turns every loss into a lesson and every clip into content.
+
+Four things the yard is for, and the four calls that settle them:
+
+- **Supply** — the register (ADR 0013). A ghost is a *habit* fitted from a rider's recent passes, not
+  a recording: attributed by name, sampled fresh at each commit, blind to the hole card. Below the
+  fielding threshold you meet **house riders**, the yard's own labeled personalities (the M1 scripted
+  riders, kept forever). Two honest categories; we never dress a bot as a stranger.
+- **Re-entry** — the re-mount contract (ADR 0012). You get up where you fell and the next pass is
+  offered where you land: `LOBBY.REMOUNT_SECONDS`, ceremony included, checked against the pass cycle in
+  `tests/Constants.spec.luau`. Losing must cost less time than playing. **This is the only piece of the
+  yard M1 builds**, because success criterion (a) is a measurement of it.
+- **The information market** — the rail (ADR 0014). Ghost-fill deletes the wait, so spectating is
+  **scouting**: the pass you watch is a pass you are not riding, and what it buys is a read on a
+  specific rider. Being watched is public, so playing to the crowd is a legal bluff. The tally board
+  (rates, traces, replays) is free and identical for everyone — information is never sold.
+- **Standing** — the gauntlet (ADR 0015). A match is one duel; a **gauntlet** is a run of wins on one
+  horse; the escalating stake is **exposure, not gold** — the pennant holder rides the center lane in
+  front of the rail, so a long run is scouted harder. Difficulty rises as information, never as stats.
+
+The mind game therefore runs at three timescales, each with a home: passes inside a duel (§3), duels
+inside a grudge (the rematch default), and habits across a career (the register and the board).
 
 ## 9. The chase
 
@@ -219,7 +246,10 @@ that ship with an arguable meta get their first content wave made for them.
 ## 10. Scope doctrine: three things (plus Thing 0)
 
 1. **The pass** — §3+§4. ~80% of the product; deserves the majority of total dev time.
-2. **The loop** — §8. Mostly staging, not systems.
+2. **The loop** — §8, deep doc [loop/LOBBY.md](loop/LOBBY.md). Mostly staging, not systems — and the
+   design confirmed it: of everything in the yard, exactly one piece is a system, and it is the ghost
+   register, which was already Thing 0. Everything else is a place, a budget, or a rule about what the
+   server may send to whom.
 3. **The chase** — §9. The only real "system"; ships small.
 - **Thing 0: opponent supply** — ghost-first (§2.3) makes population a solved problem, not a launch risk.
 
@@ -261,14 +291,24 @@ elimination stakes, the craft web as the front door.
 - **The aim distribution real players produce** — the sim's riders use fixed aim policies; the real
   distribution is the same blind spot as the hold-fraction one above, and it is what would reopen
   ADR 0006's scale or ADR 0008's threshold.
-- Wager layer (raise/yield): in v1 or update two?
+- Wager layer (raise/yield): in v1 or update two? Its lobby-side cousin — **rail wagering**, betting on
+  the joust you are watching — is deferred by [loop/LOBBY.md](loop/LOBBY.md) §10 and must clear
+  ADR 0014's information fence before it is designed at all.
 - The chase's faucet + acquisition loop + any idle layer (undesigned — the D1 half; own session).
 - ~~Matchmaking: trophy gating vs stakes rooms~~ — settled by ADR 0002 with a third option neither
   listed: **horse-tier rooms**. The horse you bring is the room you are in. What replaces it: the
   speed-to-run-up-duration mapping per bracket, which `tools/sim.luau` cannot answer (it resolves
   commitments; the open question is how long a *human* needs to make one) and which needs a playtest
   instrument that does not exist yet.
-- Match wrapper: is a "match" one duel to unhorse, or best-of-duels? Session rhythm target.
+- ~~Match wrapper: one duel to unhorse, or best-of-duels?~~ — settled by ADR 0015: **one duel is a
+  match**, and the session's shape is the **gauntlet** (a run of wins on one horse, banked per win,
+  escalating in exposure rather than in stakes). Best-of-duels lost because the yomi it buys is already
+  bought inside a duel, at double the ceremony and double the price of a loss. What replaces it: the
+  yard's own list, in [loop/LOBBY.md](loop/LOBBY.md) §12 — ghost fidelity and its conditioning set
+  (answerable headlessly, since the register plugs into `tools/sim.luau`'s rider interface), whether
+  one threshold should really do both of ADR 0013 §5's jobs, whether ghosts outperform the riders they
+  were fitted from, tourney cadence and seeding, background ghost-vs-ghost passes on a quiet server,
+  and what a party (cap 2) does in a 1v1 game.
 - The charge's kinesthetic/presentation layer (camera, sound ramp, crowd) — designed only by feel,
   in-engine.
 - Does the mind game survive contact with the real population? (Random-mashing kids are unreadable

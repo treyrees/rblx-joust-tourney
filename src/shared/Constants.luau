@@ -33,6 +33,44 @@ Constants.PASS = {
 -- may make the joust look faster than this implies, but not think faster.
 Constants.PASS.MIN_RUNUP_SECONDS = Constants.PASS.AIM_LOCK_BEFORE_TICK / Constants.PASS.AIM_LOCK_MAX_RUNUP_FRACTION
 
+-- THE YARD (docs/design/loop/LOBBY.md) — the loop's timing budgets, in the same place as the pass's.
+-- These are the numbers the lobby is not allowed to quietly spend: how long a first session waits
+-- before its first commitment, how long a loss costs, and how long anyone can be left without an
+-- opponent. Every one of them is a ceiling, not a target, and four are cross-checked against the pass
+-- cycle in tests/Constants.spec.luau — a "just two more seconds" flourish on the ceremony fails the
+-- build rather than eating the "one more" impulse M1's success criterion is measured on (ADR 0012).
+--
+-- Only the re-mount pair ships in M1. The rest are designed-not-built (LOBBY.md §10) and live here
+-- because the design pinned them, and Constants is where pinned numbers live.
+Constants.LOBBY = {
+	-- Spawn to a new rider's first commitment. Under one pass cycle, which is what forces the gate to
+	-- face lane one and the first opponent to be a house rider already mounted (ADR 0012 §4).
+	FIRST_PASS_SECONDS = 12,
+	-- The post-match beat: the fall, the reveal, the purse, the pennant. A hard ceiling — a ceremony
+	-- that outlives the emotion it celebrates is how a fast loop dies.
+	CEREMONY_SECONDS = 4,
+	-- Unhorse to the next commitment being live, ceremony included. No walk, no menu, no lobby return
+	-- (ADR 0012 §5). Must stay under one pass cycle: if losing costs more time than playing, "one more"
+	-- stops being an impulse and becomes a decision.
+	REMOUNT_SECONDS = 8,
+	-- How long the lists look for a live rider before offering a ghost. Long enough that a populated
+	-- server pairs humans, short enough that nobody experiences it as a queue — which is exactly why
+	-- the rail cannot be a waiting room and is a scouting stand instead (ADR 0014 §2).
+	GHOST_FILL_SECONDS = 3,
+	-- A thrown glove's lifetime, counted in the challenged rider's MOUNTABLE time rather than wall
+	-- clock, so it survives the duel they are in the middle of. Expiry is not a refusal: the challenger
+	-- rides their ghost instead (ADR 0013 §6).
+	CHALLENGE_EXPIRY_SECONDS = 30,
+	-- One threshold doing two jobs: a rider's ghost starts riding, and their tally-board record goes
+	-- public, at the same moment. You become studyable exactly when you become worth studying
+	-- (ADR 0013 §5, ADR 0014 §5).
+	GHOST_MIN_PASSES = 20,
+	-- What the register remembers. The reinvention clock: a rider who changes stops being the rider
+	-- their ghost was fitted from, so being unreadable is a thing you keep doing rather than a thing you
+	-- achieved once (ADR 0013 §4). Also the dial on how hard the center lane punishes a long run.
+	HABIT_WINDOW_PASSES = 60,
+}
+
 -- The directions plus neutral (GAME_SPEC §3, ADR 0006). The game is played on a FOUR-DIRECTION
 -- BASIS — in/out/up/down are the words the design speaks — with the diagonals between them giving
 -- the wheel its granularity: eight notches of 45 degrees. Self-relative framing throughout, so the
