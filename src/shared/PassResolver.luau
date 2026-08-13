@@ -14,25 +14,16 @@
 --     BEFORE the dice land.
 
 local Constants = require(script.Parent.Constants)
+local Types = require(script.Parent.Types)
 
 local PassResolver = {}
 
-export type Direction =
-	| "up"
-	| "up-in"
-	| "in"
-	| "down-in"
-	| "down"
-	| "down-out"
-	| "out"
-	| "up-out"
-	| "neutral"
-
--- blocked — the strike met the Shield or the Guard (clean if the defender supershielded, thin otherwise)
--- normal  — an uncontested strike
--- crit    — struck in the Crit the defender's own Aim opened, and left uncovered
--- weak    — a neutral-aim strike: chip damage, no crit potential, no honesty buff (§3 baseline 1)
-export type Tier = "blocked" | "normal" | "crit" | "weak" | "mortal"
+-- The pass vocabulary lives in Types.luau so Constants can annotate its tables with the same
+-- singleton unions these signatures speak (ADR 0011). Re-exported here because callers reach for
+-- `PassResolver.Direction` — the resolver is the module they already require.
+export type Direction = Types.Direction
+export type RingClass = Types.RingClass
+export type Tier = Types.Tier
 
 -- One rider's snapshotted commitment at the tick.
 --   shield       — chosen in intermission, hidden until impact (the hole card)
@@ -132,12 +123,12 @@ end
 -- What the defender's ring says about a strike arriving from direction `aim`: "crit", "guard",
 -- "normal", or nil when the defender is aiming neutral and therefore has no ring at all (§3 neutral
 -- baseline 2 — maximally soft, which is what prices cageyness).
-function PassResolver.ringClass(defender: Commitment, aim: Direction): string?
+function PassResolver.ringClass(defender: Commitment, aim: Direction): RingClass?
 	local off = PassResolver.offset(defender.aim, aim)
 	if off == nil then
 		return nil
 	end
-	local class = Constants.RING[(off + anchorOf(defender)) % PassResolver.notches()]
+	local class: RingClass = Constants.RING[(off + anchorOf(defender)) % PassResolver.notches()]
 	-- Degrade the slice by however many times this absolute direction has been broken.
 	local steps = if Constants.BREAK.ENABLED then ((defender.broken or {})[aim] or 0) else 0
 	for _ = 1, steps do
@@ -171,7 +162,7 @@ function PassResolver.breaks(attacker: Commitment, tier: Tier): boolean
 end
 
 -- Every direction whose ring class is `class`, in ring order. Shared by `guards` and `crits`.
-local function directionsOfClass(commitment: Commitment, class: string): { Direction }
+local function directionsOfClass(commitment: Commitment, class: RingClass): { Direction }
 	local out: { Direction } = {}
 	if commitment.aim == Constants.DIRECTIONS.NEUTRAL then
 		return out
@@ -332,7 +323,10 @@ end
 -- Full damage for one strike: base tier damage scaled by the attacker's honesty (offensive) bonus.
 -- A weak (neutral) strike takes no bonus at all — §3 baseline 1's "zero honesty buff".
 function PassResolver.strikeDamage(attacker: Commitment, defender: Commitment): (number, Tier)
-	local tier = PassResolver.tier(attacker, defender)
+	-- Annotated rather than inferred: the default Luau solver widens a multi-branch singleton return
+	-- back to `string` when the function is reached through a module table, which silently unpicks the
+	-- whole Tier union at every call site downstream. The annotation pins it. (ADR 0011.)
+	local tier: Tier = PassResolver.tier(attacker, defender)
 	-- A block is clean when the Shield and a Guard notch coincide AT THE STRUCK NOTCH. Under the
 	-- shipped "block" mode the defender-wide test is equivalent, since the Shield-on-Guard notch is
 	-- the only one that can be struck cleanly; under "amplifier" it is not, so ask per strike.
@@ -385,8 +379,8 @@ function PassResolver.resolve(
 	local superA, superB = PassResolver.isSupershielded(commitA), PassResolver.isSupershielded(commitB)
 
 	-- Snapshot phase: every strike reads only the pre-pass commitments.
-	local damageToB, tierB = PassResolver.strikeDamage(commitA, commitB)
-	local damageToA, tierA = PassResolver.strikeDamage(commitB, commitA)
+	local damageToB: number, tierB: Tier = PassResolver.strikeDamage(commitA, commitB)
+	local damageToA: number, tierA: Tier = PassResolver.strikeDamage(commitB, commitA)
 
 	-- The defensive bonus: a clean (supershielded) block restores Balance — blocking is a win, not a
 	-- non-loss (§4) — capped well below a normal hit so Balance still only trends down.

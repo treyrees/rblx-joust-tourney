@@ -47,31 +47,51 @@ resolved in a single tick. Successor project to Grindstone Gladiators (`treyrees
 ## Commands
 
 ```bash
+tools/install-toolchain.sh       # pinned lune + luau-lsp + rojo, prebuilt (~2s). Run first if bare.
+QUICK=1 tools/gates.sh           # ALL FIVE gates, ~9s — the inner-loop command
+tools/gates.sh                   # all five at full scale (~2min, the sim dominates)
+tools/gates.sh tests             # one gate: typecheck | tests | design-lint | sim | rings
 rojo serve                       # sync default.project.json → src/ into Studio
-lune run tests/run.luau          # unit tests (headless, no Studio — the robloxenv shim)
-lune run tools/design-lint.luau  # design-doc drift / link / ADR checker
-lune run tools/sim.luau          # the round robin — whole matches, scripted riders
-lune run tools/rings.luau --verify  # the equilibrium gate — what scripted riders can't see (inv. 9)
 ```
 
-All four run in CI on every PR and push to `main` (`.github/workflows/gates.yml`), and again at
-session start via `.claude/hooks/session-start.sh` (remote sessions). CI is the one that gates.
-The last two are one gate with two halves — complementary blind spots; combat-axis ADRs cite both.
-Rojo maps `src/{server,client,gui,shared}` → ServerScriptService / StarterPlayerScripts / StarterGui /
-ReplicatedStorage.Shared.
+`tools/gates.sh` is the single definition of the gates; CI, the session-start hook and you all call
+it, and `tests/Toolchain.spec.luau` fails the build if any caller stops going through it. Versions are
+pinned once in `tools/toolchain.env`. CI (`.github/workflows/gates.yml`) runs all five at full scale
+on every PR and push to `main` and is the one that gates; the session hook runs them `QUICK=1`.
+`sim` + `rings` are one gate with two halves — complementary blind spots; combat-axis ADRs cite both.
+
+**Two traps that cost whole sessions:** the full `sim` takes ~2 minutes, so a bare `lune run
+tools/sim.luau` exceeds the default 120s command timeout, returns nothing, and invites a re-run —
+use `--smoke`/`QUICK=1` unless you are pinning a number, and raise the timeout when you are. And
+never pipe a chatty command into `head`; redirect to a file and grep it. WORKFLOW.md's *"Things that
+make a session take an hour"* has the rest, each with its fix.
+
+Code layout, the mount rules, and where M1's pieces go:
+**[docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md)**. Rojo maps
+`src/{server,client,gui,shared}` → ServerScriptService / StarterPlayerScripts / StarterGui /
+ReplicatedStorage.Shared, and `tests/lib/robloxenv.luau` mirrors all four so every mount is testable
+headlessly.
 
 ## How we work
 
-**[docs/design/WORKFLOW.md](docs/design/WORKFLOW.md)** — the doc↔code↔ADR stewardship loop + the two
-gates, carried over from the predecessor repo where it was proven across 200+ ADRs. Follow it on
-every change. Doc conventions (front-matter, ADR format): [docs/design/README.md](docs/design/README.md).
+**[docs/design/WORKFLOW.md](docs/design/WORKFLOW.md)** — the doc↔code↔ADR stewardship loop, the five
+gates, and the session-time table; carried over from the predecessor repo where it was proven across
+200+ ADRs. Follow it on every change. Doc conventions (front-matter, ADR format):
+[docs/design/README.md](docs/design/README.md). Code layout and the mount rules:
+[docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md).
 
 ## Conventions
 
-- Luau, `--!strict` on new modules; OOP via metatables (`Module.new()`).
+- Luau, `--!strict` on every module; OOP via metatables (`Module.new()`). Shared types live in
+  `src/shared/Types.luau` — annotate against it rather than letting `Direction`/`Tier` widen to
+  `string`, which is how eight type errors accumulated behind an unchecked `--!strict` (ADR 0011).
 - Constants are the single source of truth — never hardcode tuning numbers.
+- `src/shared` is **pure**: no engine, no clock, no ambient RNG (the teeter roll is injected by the
+  caller). The instruments and invariants 3 and 6 all rest on it; `tests/Purity.spec.luau` enforces
+  it, with an `-- @impure: <reason>` escape hatch. See ARCHITECTURE.md.
 - Headless-first: every pure system (matrix resolution, Balance math, proration, ghost replay) gets
-  Lune unit tests before it gets a UI. Port the test harness from rblx-auto-br.
+  Lune unit tests before it gets a UI. All four mounts are requireable from the shim, so "it needs
+  the engine" is a claim to check, not assume. Port the test harness from rblx-auto-br.
 - Design lives in `docs/design/`; decisions are append-only ADRs in `docs/design/decisions/`
   (numbered from 0001). Meaningful design calls get an ADR — same WORKFLOW discipline as the
   predecessor repo.

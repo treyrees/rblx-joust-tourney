@@ -2,7 +2,7 @@
 maps-to: [src/shared/Constants.luau, src/shared/PassResolver.luau]
 decisions: [0001, 0002, 0004, 0006, 0007, 0008, 0009]
 owner: trey
-updated: 2026-07-30
+updated: 2026-08-13
 ---
 
 # JOUST — Founding Game Spec

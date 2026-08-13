@@ -1,11 +1,13 @@
 name: gates
 
-# The two gates from docs/design/WORKFLOW.md, plus the pass simulator, run on every PR and every
-# push to main. Until this existed they only ran via .claude/hooks/session-start.sh, which meant a
-# change that never had a session attached to it was never verified at all.
+# The gates from docs/design/WORKFLOW.md, on every PR and every push to main. Until this existed they
+# only ran via .claude/hooks/session-start.sh, which meant a change that never had a session attached
+# to it was never verified at all.
 #
-# Lune is the only dependency. It is installed from a pinned prebuilt release rather than
-# `cargo install`, which compiles from source and takes minutes; the download takes seconds.
+# The gate LIST and the commands that implement it live in tools/gates.sh, and the toolchain versions
+# in tools/toolchain.env — deliberately, so this workflow cannot drift away from what a developer or
+# the session hook runs. Each gate gets its own step purely so the GitHub UI names the red one; the
+# step bodies are one-liners into the same script.
 
 on:
   pull_request:
@@ -23,8 +25,6 @@ permissions:
 jobs:
   gates:
     runs-on: ubuntu-latest
-    env:
-      LUNE_VERSION: "0.10.5"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,41 +33,46 @@ jobs:
           # needs the full log to tell drift from a doc that was simply never touched.
           fetch-depth: 0
 
-      - name: Install Lune
+      # All four binaries (lune, luau-lsp, rojo) and the Roblox type definitions, at the versions
+      # pinned in tools/toolchain.env. Prebuilt downloads only — no from-source builds.
+      - name: Install toolchain
         run: |
-          set -euo pipefail
-          url="https://github.com/lune-org/lune/releases/download/v${LUNE_VERSION}/lune-${LUNE_VERSION}-linux-x86_64.zip"
-          curl -fsSL -o /tmp/lune.zip "$url"
-          unzip -q /tmp/lune.zip -d /tmp/lune
-          chmod +x /tmp/lune/lune
-          echo /tmp/lune >> "$GITHUB_PATH"
+          tools/install-toolchain.sh
+          tools/install-toolchain.sh --print-path >> "$GITHUB_PATH"
 
-      - name: Lune version
-        run: lune --version
+      - name: Toolchain versions
+        run: lune --version && luau-lsp --version && rojo --version
 
-      # Gate one: the code is correct.
+      # Gate one: the code type-checks. Roblox's own analysis engine over src/, driven by the Rojo
+      # instance sourcemap so `require(script.Parent.X)` resolves the way it does in Studio, with
+      # .luaurc putting the whole tree in strict mode and turning lints into errors. Added by
+      # ADR 0011 after it found eight live type errors in code that had been shipping as `--!strict`.
+      - name: Typecheck
+        run: tools/gates.sh typecheck
+
+      # Gate two: the code is correct.
       - name: Unit tests
-        run: lune run tests/run.luau
+        run: tools/gates.sh tests
 
-      # Gate two: docs, code and ADRs are consistent. Exits 1 on a structural problem (a dead
+      # Gate three: docs, code and ADRs are consistent. Exits 1 on a structural problem (a dead
       # maps-to path, a broken link, a missing or superseded ADR, a combat-axis ADR with no cited
       # sim run); drift is a warning and does not fail the build.
       - name: Design lint
-        run: lune run tools/design-lint.luau
+        run: tools/gates.sh design-lint
 
-      # Gate three, half one: the round robin. Exits non-zero if convergence leaves GAME_SPEC §4's
+      # Gate four, half one: the round robin. Exits non-zero if convergence leaves GAME_SPEC §4's
       # 3-5 pass band, if reading stops beating random by a wide margin OR starts beating it so
       # wide that information swallows the dice (both bounds of CLAUDE.md invariant 7), if most
       # falls come off near-certain rolls, or if neutral-camping climbs the table. Deterministic
-      # (fixed seed, LCG), ~90s at full scale, run at the same settings an ADR would cite.
+      # (fixed seed, LCG), ~2min at full scale, run at the same settings an ADR would cite.
       - name: Pass simulator
-        run: lune run tools/sim.luau
+        run: tools/gates.sh sim
 
-      # Gate three, half two: the equilibrium solver on the shipped ring. Scripted riders cannot
+      # Gate four, half two: the equilibrium solver on the shipped ring. Scripted riders cannot
       # find an equilibrium exploit — a configuration once passed every simulator verdict while its
       # equilibrium crit rate was 0.0% and its hole card was worth 0.01 Balance. This half enforces
       # what only a solver can see: the hole card stays live (~1 bit, real Balance), crits fire
       # between good players, no pure line dominates, and the ring stays chiral with its exposure
       # wider than the Shield plate (CLAUDE.md invariants 8-9, ADR 0010). Runs in ~1s.
       - name: Equilibrium verify
-        run: lune run tools/rings.luau --verify
+        run: tools/gates.sh rings
